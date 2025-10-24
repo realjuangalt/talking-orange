@@ -11,6 +11,7 @@ const WebSocket = require('ws');
 const WhisperService = require('./services/whisper-service');
 const TTSService = require('./services/tts-service');
 const LLMService = require('./services/llm-service');
+const BitcoinContentService = require('./services/bitcoin-content-service');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,6 +20,7 @@ const PORT = process.env.PORT || 3000;
 const whisperService = new WhisperService();
 const ttsService = new TTSService();
 const llmService = new LLMService();
+const bitcoinContentService = new BitcoinContentService();
 
 // Middleware
 app.use(helmet());
@@ -155,11 +157,20 @@ app.post('/api/speech/process', async (req, res) => {
       return res.status(400).json({ error: 'No text or audio provided' });
     }
 
-    // Generate response using LLM
-    const llmResponse = await llmService.generateResponse(userInput, {
-      sessionId: sessionId || 'anonymous',
-      bitcoinContext: true
-    });
+    // Generate response using Bitcoin Content Service (preferred) or LLM fallback
+    let llmResponse;
+    try {
+      llmResponse = await bitcoinContentService.generateBitcoinResponse(userInput, {
+        sessionId: sessionId || 'anonymous',
+        bitcoinContext: true
+      });
+    } catch (error) {
+      console.warn('Bitcoin Content Service failed, falling back to LLM:', error.message);
+      llmResponse = await llmService.generateResponse(userInput, {
+        sessionId: sessionId || 'anonymous',
+        bitcoinContext: true
+      });
+    }
 
     // Generate speech audio
     let audioUrl = null;
@@ -248,6 +259,29 @@ app.post('/api/assets/upload', upload.single('asset'), (req, res) => {
   );
 });
 
+// Bitcoin content generation endpoint
+app.post('/api/bitcoin/content', async (req, res) => {
+  try {
+    const { contentType, topic, difficulty, length } = req.body;
+    
+    const content = await bitcoinContentService.generateBitcoinContent(contentType, {
+      topic: topic || 'general',
+      difficulty: difficulty || 'beginner',
+      length: length || 'short'
+    });
+    
+    if (!content) {
+      return res.status(500).json({ error: 'Content generation failed' });
+    }
+    
+    res.json(content);
+    
+  } catch (error) {
+    console.error('Bitcoin content generation error:', error);
+    res.status(500).json({ error: 'Content generation failed' });
+  }
+});
+
 // Analytics endpoint
 app.post('/api/analytics', (req, res) => {
   const { sessionId, eventType, data } = req.body;
@@ -287,6 +321,7 @@ async function startServer() {
     await whisperService.initialize();
     await ttsService.initialize();
     await llmService.initialize();
+    await bitcoinContentService.initialize();
     
     console.log('✅ All services initialized');
     
@@ -298,6 +333,7 @@ async function startServer() {
       console.log(`🎤 Whisper: ${whisperService.getStatus().initialized ? '✅' : '❌'}`);
       console.log(`🔊 TTS: ${ttsService.getStatus().initialized ? '✅' : '❌'}`);
       console.log(`🤖 LLM: ${llmService.getStatus().initialized ? '✅' : '❌'}`);
+      console.log(`₿ Bitcoin AI: ${bitcoinContentService.getStatus().initialized ? '✅' : '❌'}`);
     });
     
   } catch (error) {
