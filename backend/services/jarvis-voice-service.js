@@ -5,7 +5,7 @@ const fs = require('fs');
 class JarvisVoiceService {
     constructor() {
         this.isInitialized = false;
-        this.jarvisDir = path.join(__dirname, '../../jarvis/writing_assistant');
+        this.genDir = path.join(__dirname, '../../gen');
         this.pythonPath = process.env.PYTHON_PATH || 'python3';
         this.veniceApiKey = process.env.VENICE_KEY;
         this.whisperModel = process.env.WHISPER_MODEL_NAME || 'small';
@@ -16,9 +16,9 @@ class JarvisVoiceService {
         try {
             console.log('🎤 Initializing Jarvis Voice Service...');
             
-            // Check if Jarvis directory exists
-            if (!fs.existsSync(this.jarvisDir)) {
-                throw new Error('Jarvis writing assistant directory not found. Please ensure jarvis/writing_assistant exists.');
+            // Check if gen directory exists
+            if (!fs.existsSync(this.genDir)) {
+                throw new Error('Gen directory not found. Please ensure the gen folder is present.');
             }
             
             // Check Python dependencies
@@ -272,7 +272,7 @@ except Exception as e:
             } = context;
 
             // Create Bitcoin-specific system prompt
-            const systemPrompt = this.createBitcoinSystemPrompt(responseType);
+            const systemPrompt = await this.createBitcoinSystemPrompt(responseType);
             
             // Generate response using Venice AI
             const response = await this.callVeniceAPI(userInput, systemPrompt);
@@ -366,7 +366,19 @@ except Exception as e:
         }
     }
 
-    createBitcoinSystemPrompt(responseType) {
+    async createBitcoinSystemPrompt(responseType) {
+        try {
+            // Try to load the Bitcoin evangelism prompt from the gen system
+            const promptPath = path.join(this.genDir, 'prompts', 'bitcoin_evangelism.txt');
+            if (fs.existsSync(promptPath)) {
+                const bitcoinPrompt = fs.readFileSync(promptPath, 'utf8');
+                return bitcoinPrompt;
+            }
+        } catch (error) {
+            console.warn('Failed to load Bitcoin evangelism prompt, using fallback:', error.message);
+        }
+
+        // Fallback prompt
         const basePrompt = `You are the Talking Orange, a friendly and enthusiastic Bitcoin evangelist. Your mission is to educate people about Bitcoin in an engaging, accessible way.
 
 PERSONALITY:
@@ -425,10 +437,10 @@ You have access to web search capabilities, so you can provide up-to-date inform
 
     async runPythonScript(script) {
         return new Promise((resolve, reject) => {
-            const python = spawn(this.pythonPath, ['-c', script], {
-                cwd: this.jarvisDir,
-                env: { ...process.env }
-            });
+        const python = spawn(this.pythonPath, ['-c', script], {
+            cwd: this.genDir,
+            env: { ...process.env }
+        });
 
             let stdout = '';
             let stderr = '';
@@ -458,7 +470,7 @@ You have access to web search capabilities, so you can provide up-to-date inform
     getStatus() {
         return {
             initialized: this.isInitialized,
-            jarvisDir: this.jarvisDir,
+            genDir: this.genDir,
             pythonPath: this.pythonPath,
             whisperModel: this.whisperModel,
             modelDir: this.modelDir

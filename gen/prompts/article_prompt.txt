@@ -1,0 +1,33 @@
+Please process the following transcript and any additional research inputs to create a well-structured article in Markdown format. Follow these steps:
+
+1. **Article Generation**:
+   - Identify the main ideas from the transcript and rewrite them into a coherent article. Keep as many of the same words as possible.
+   - Use appropriate Markdown syntax (e.g., # for titles, ## for subtitles, - for bullet points).
+   - If the transcript includes multiple voices (e.g., different speakers), clearly distinguish them in the article (e.g., using subheadings like "Speaker 1: [Name]" or quotes with attribution).
+   - Preserve the tone of the transcript (e.g., formal, casual, humorous) in the article.
+   - Incorporate any additional research inputs provided to enhance the article with relevant facts, context, or insights.
+
+2. **Thumbnail Prompts**:
+   - Generate 1–3 thumbnail prompts that visually represent the article’s main themes.
+   - Each thumbnail prompt should be a detailed description suitable for an image generation API, including size (1280x720 pixels), style, colors, and key visual elements.
+   - Format each thumbnail prompt in the following computer-readable format:
+     <tn><1>THUMBNAIL PROMPT 1</1></tn>
+     <tn><2>THUMBNAIL PROMPT 2</2></tn>
+     (Continue numbering for each prompt, e.g., <3> for the third prompt.)
+   - Place all thumbnail prompts at the end of the article output, after the Markdown content.
+
+**Example Output Format**:
+# Article Title
+## Subtitle
+Content of the article in Markdown format...
+
+<tn><1>1280x720 pixels, vibrant cyberpunk style, neon blue and pink colors, a futuristic cityscape with the article title in bold white text</1></tn>
+<tn><2>1280x720 pixels, minimalist style, white background, a single bold icon representing the main theme, article title in black text</2></tn>
+
+**Inputs**:
+- Keep in mind some key words that you might hear and could misspell in the transcript.
+- Transcript:
+[Transcript content will be appended here]
+
+- Additional Research:
+[Additional research content will be appended here]

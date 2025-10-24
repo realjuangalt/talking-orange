@@ -12,9 +12,9 @@ if [[ "$OSTYPE" != "linux-gnu"* ]]; then
     exit 1
 fi
 
-# Check if jarvis directory exists
-if [ ! -d "jarvis/writing_assistant" ]; then
-    echo "❌ Jarvis writing assistant directory not found. Please ensure jarvis/writing_assistant exists."
+# Check if gen directory exists
+if [ ! -d "gen" ]; then
+    echo "❌ Gen directory not found. Please ensure the gen folder is present."
     exit 1
 fi
 
@@ -51,18 +51,18 @@ pip3 install --user \
     aiohttp \
     yt-dlp
 
-# Install additional packages for the writing assistant
-echo "🔧 Installing writing assistant dependencies..."
-cd jarvis/writing_assistant
+# Install additional packages for the gen system
+echo "🔧 Installing gen system dependencies..."
+cd gen
 pip3 install --user \
-    python-telegram-bot==20.6 \
     whisper \
     pydub \
     yt-dlp \
     requests \
-    python-dotenv
+    python-dotenv \
+    aiohttp
 
-cd ../..
+cd ..
 
 # Test Python installation
 echo "🧪 Testing Python installation..."
@@ -71,9 +71,9 @@ python3 -c "import pydub; print('✅ pydub available')" || echo "❌ pydub not a
 python3 -c "import torch; print('✅ torch available')" || echo "❌ torch not available"
 python3 -c "import requests; print('✅ requests available')" || echo "❌ requests not available"
 
-# Test Jarvis voice service
-echo "🧪 Testing Jarvis voice service..."
-cd jarvis/writing_assistant
+# Test gen system voice service
+echo "🧪 Testing gen system voice service..."
+cd gen
 python3 -c "
 import sys
 import os
@@ -87,14 +87,14 @@ try:
     print('✅ Requests imported successfully')
     
     # Test TTS functionality
-    print('✅ Jarvis voice service components available')
+    print('✅ Gen system voice service components available')
     
 except ImportError as e:
     print(f'❌ Import failed: {e}')
 except Exception as e:
-    print(f'❌ Jarvis voice service error: {e}')
+    print(f'❌ Gen system voice service error: {e}')
 "
-cd ../..
+cd ..
 
 # Test API keys
 echo "🔑 Testing API keys..."
@@ -123,10 +123,10 @@ import sys
 import os
 import json
 
-# Add jarvis directory to path
-jarvis_dir = os.path.join(os.path.dirname(__file__), 'jarvis/writing_assistant')
-if jarvis_dir not in sys.path:
-    sys.path.insert(0, jarvis_dir)
+# Add gen directory to path
+gen_dir = os.path.join(os.path.dirname(__file__), 'gen')
+if gen_dir not in sys.path:
+    sys.path.insert(0, gen_dir)
 
 async def test_jarvis_voice():
     try:
@@ -150,7 +150,7 @@ async def test_jarvis_voice():
         else:
             print("⚠️ Venice AI API key not found")
         
-        print("🎉 Jarvis voice service test successful!")
+        print("🎉 Gen system voice service test successful!")
         return True
         
     except Exception as e:
@@ -160,21 +160,21 @@ async def test_jarvis_voice():
 if __name__ == "__main__":
     success = asyncio.run(test_jarvis_voice())
     if success:
-        print("🎉 Jarvis voice service test successful!")
+        print("🎉 Gen system voice service test successful!")
     else:
-        print("❌ Jarvis voice service test failed!")
+        print("❌ Gen system voice service test failed!")
         sys.exit(1)
 EOF
 
 chmod +x test-jarvis-voice.py
 
 # Run test
-echo "🧪 Running Jarvis voice service test..."
+echo "🧪 Running gen system voice service test..."
 python3 test-jarvis-voice.py
 
 if [ $? -eq 0 ]; then
     echo ""
-    echo "🎉 Jarvis voice service setup completed successfully!"
+    echo "🎉 Gen system voice service setup completed successfully!"
     echo ""
     echo "📋 Next steps:"
     echo "1. Ensure your .env file has VENICE_KEY and other required keys"
@@ -186,7 +186,7 @@ if [ $? -eq 0 ]; then
     echo "- If API calls fail, verify your API keys in .env"
     echo "- Check the server logs for detailed error messages"
     echo ""
-    echo "🎭 Jarvis voice service features:"
+    echo "🎭 Gen system voice service features:"
     echo "- Whisper transcription with local models"
     echo "- Venice AI TTS with bm_fable voice"
     echo "- Bitcoin-specific content generation"
@@ -195,7 +195,7 @@ if [ $? -eq 0 ]; then
     echo "₿ Happy Bitcoin evangelizing with your enhanced Orange!"
 else
     echo ""
-    echo "❌ Jarvis voice service setup failed!"
+    echo "❌ Gen system voice service setup failed!"
     echo "Please check the error messages above and try again."
     echo ""
     echo "Common issues:"
