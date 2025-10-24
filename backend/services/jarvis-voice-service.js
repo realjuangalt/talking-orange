@@ -86,52 +86,53 @@ else:
         try {
             const {
                 language = 'en',
-                model = this.whisperModel,
-                device = 'cpu'
+                model = this.whisperModel
             } = options;
 
-            // Save audio buffer to temporary file
-            const timestamp = Date.now();
-            const tempDir = path.join(__dirname, '../tmp');
-            if (!fs.existsSync(tempDir)) {
-                fs.mkdirSync(tempDir, { recursive: true });
-            }
-            
-            const audioPath = path.join(tempDir, `audio_${timestamp}.wav`);
-            fs.writeFileSync(audioPath, audioBuffer);
-
-            // Create Python script for transcription
+            // Create Python script using the new voice processing module
             const pythonScript = `
-import whisper
-import torch
-import os
 import sys
+import os
+import base64
+import tempfile
 
-# Set up paths
-model_dir = "${this.modelDir}"
-model_name = "${model}"
-audio_path = "${audioPath}"
-device = "${device}"
+# Add gen directory to path
+gen_dir = "${this.genDir}"
+if gen_dir not in sys.path:
+    sys.path.insert(0, gen_dir)
 
 try:
-    # Load Whisper model
-    model = whisper.load_model(model_name, download_root=model_dir, device=device)
+    from voice_to_text import VoiceToTextService
     
-    # Transcribe audio
-    result = model.transcribe(audio_path, fp16=device == "cuda")
-    transcription = result["text"].strip()
+    # Initialize STT service
+    stt_service = VoiceToTextService(model_name="${model}")
+    if not stt_service.initialize():
+        print("ERROR:Failed to initialize STT service")
+        sys.exit(1)
     
-    print(f"TRANSCRIPTION_RESULT:{transcription}")
+    # Create temporary file from audio buffer
+    audio_data = base64.b64decode("${audioBuffer.toString('base64')}")
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+        temp_file.write(audio_data)
+        temp_path = temp_file.name
     
+    try:
+        # Transcribe audio
+        result = stt_service.transcribe_audio(temp_path, "${language}")
+        print(f"TRANSCRIPTION_RESULT:{result['text']}")
+        print(f"LANGUAGE:{result['language']}")
+        print(f"MODEL:{result['model']}")
+        print(f"CONFIDENCE:{result['confidence']}")
+    finally:
+        # Clean up
+        try:
+            os.unlink(temp_path)
+        except:
+            pass
+            
 except Exception as e:
     print(f"ERROR:{str(e)}")
     sys.exit(1)
-finally:
-    # Clean up audio file
-    try:
-        os.remove(audio_path)
-    except:
-        pass
             `;
 
             const result = await this.runPythonScript(pythonScript);
@@ -142,14 +143,17 @@ finally:
             
             // Extract transcription from output
             const output = result.output;
-            const match = output.match(/TRANSCRIPTION_RESULT:(.+)/);
+            const transcriptionMatch = output.match(/TRANSCRIPTION_RESULT:(.+)/);
+            const languageMatch = output.match(/LANGUAGE:(.+)/);
+            const modelMatch = output.match(/MODEL:(.+)/);
+            const confidenceMatch = output.match(/CONFIDENCE:(.+)/);
             
-            if (match) {
+            if (transcriptionMatch) {
                 return {
-                    text: match[1],
-                    language: language,
-                    model: model,
-                    confidence: 0.9 // Whisper doesn't provide confidence scores
+                    text: transcriptionMatch[1],
+                    language: languageMatch ? languageMatch[1] : language,
+                    model: modelMatch ? modelMatch[1] : model,
+                    confidence: confidenceMatch ? parseFloat(confidenceMatch[1]) : 0.9
                 };
             } else {
                 throw new Error('No transcription result found');
@@ -164,63 +168,45 @@ finally:
     async synthesizeSpeech(text, options = {}) {
         try {
             const {
-                voice = 'bm_fable',
-                model = 'tts-kokoro',
+                voice = 'default',
+                engine = 'auto',
                 speed = 1.0,
                 language = 'en'
             } = options;
 
-            if (!this.veniceApiKey) {
-                throw new Error('VENICE_KEY not found. Please set it in your .env file.');
-            }
-
-            // Create Python script for TTS
+            // Create Python script using the new voice processing module
             const pythonScript = `
-import requests
-import json
-import os
 import sys
+import os
+import base64
 
-# Venice AI TTS API
-api_key = "${this.veniceApiKey}"
-text = """${text.replace(/"/g, '\\"')}"""
-voice = "${voice}"
-model = "${model}"
-speed = ${speed}
-
-headers = {
-    "Authorization": f"Bearer {api_key}",
-    "Content-Type": "application/json"
-}
-
-payload = {
-    "model": model,
-    "response_format": "mp3",
-    "speed": speed,
-    "streaming": False,
-    "voice": voice,
-    "input": text[:4096]  # Truncate to max length
-}
+# Add gen directory to path
+gen_dir = "${this.genDir}"
+if gen_dir not in sys.path:
+    sys.path.insert(0, gen_dir)
 
 try:
-    response = requests.post(
-        "https://api.venice.ai/api/v1/audio/speech",
-        json=payload,
-        headers=headers
+    from text_to_voice import TextToVoiceService
+    
+    # Initialize TTS service
+    tts_service = TextToVoiceService()
+    
+    # Synthesize speech
+    result = tts_service.synthesize_speech(
+        """${text.replace(/"/g, '\\"')}""",
+        voice="${voice}",
+        language="${language}",
+        engine="${engine}",
+        speed=${speed}
     )
     
-    if response.status_code == 200:
-        # Save audio to temporary file
-        import tempfile
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as f:
-            f.write(response.content)
-            temp_path = f.name
-        
-        print(f"AUDIO_PATH:{temp_path}")
-    else:
-        print(f"ERROR:TTS API error: {response.status_code} - {response.text}")
-        sys.exit(1)
-        
+    # Encode audio data as base64
+    audio_b64 = base64.b64encode(result['audio_data']).decode('utf-8')
+    print(f"AUDIO_DATA:{audio_b64}")
+    print(f"FORMAT:{result['format']}")
+    print(f"ENGINE:{result['engine']}")
+    print(f"VOICE:{result['voice']}")
+    
 except Exception as e:
     print(f"ERROR:{str(e)}")
     sys.exit(1)
@@ -232,29 +218,24 @@ except Exception as e:
                 throw new Error(result.error);
             }
             
-            // Extract audio path from output
+            // Extract audio data from output
             const output = result.output;
-            const match = output.match(/AUDIO_PATH:(.+)/);
+            const audioMatch = output.match(/AUDIO_DATA:(.+)/);
+            const formatMatch = output.match(/FORMAT:(.+)/);
+            const engineMatch = output.match(/ENGINE:(.+)/);
+            const voiceMatch = output.match(/VOICE:(.+)/);
             
-            if (match) {
-                const audioPath = match[1];
-                const audioBuffer = fs.readFileSync(audioPath);
-                
-                // Clean up temporary file
-                try {
-                    fs.unlinkSync(audioPath);
-                } catch (e) {
-                    console.warn('Failed to clean up temporary TTS file:', e);
-                }
+            if (audioMatch) {
+                const audioBuffer = Buffer.from(audioMatch[1], 'base64');
                 
                 return {
                     audioBuffer: audioBuffer,
-                    format: 'mp3',
-                    voice: voice,
-                    model: model
+                    format: formatMatch ? formatMatch[1] : 'wav',
+                    engine: engineMatch ? engineMatch[1] : engine,
+                    voice: voiceMatch ? voiceMatch[1] : voice
                 };
             } else {
-                throw new Error('No audio path found in TTS result');
+                throw new Error('No audio data found in TTS result');
             }
 
         } catch (error) {
