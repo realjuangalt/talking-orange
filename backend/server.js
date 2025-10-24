@@ -1,0 +1,254 @@
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const path = require('path');
+const sqlite3 = require('sqlite3').verbose();
+const multer = require('multer');
+const QRCode = require('qrcode');
+const WebSocket = require('ws');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, '../frontend')));
+
+// Database setup
+const db = new sqlite3.Database('./database.sqlite', (err) => {
+  if (err) {
+    console.error('Error opening database:', err.message);
+  } else {
+    console.log('Connected to SQLite database');
+    initializeDatabase();
+  }
+});
+
+// Initialize database tables
+function initializeDatabase() {
+  db.serialize(() => {
+    // Assets table for 3D models and animations
+    db.run(`CREATE TABLE IF NOT EXISTS assets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      path TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    // Bitcoin content table for responses
+    db.run(`CREATE TABLE IF NOT EXISTS bitcoin_content (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      topic TEXT NOT NULL,
+      content TEXT NOT NULL,
+      keywords TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    // Analytics table for tracking usage
+    db.run(`CREATE TABLE IF NOT EXISTS analytics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT,
+      event_type TEXT,
+      data TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    // Insert sample Bitcoin content
+    const sampleContent = [
+      {
+        topic: 'introduction',
+        content: 'Hello! I\'m the Talking Orange, your guide to Bitcoin! Bitcoin is digital money that works without banks or governments.',
+        keywords: 'hello,hi,intro,what is bitcoin'
+      },
+      {
+        topic: 'benefits',
+        content: 'Bitcoin gives you financial freedom! You can send money anywhere in the world, anytime, without asking permission.',
+        keywords: 'benefits,advantages,why bitcoin,freedom'
+      },
+      {
+        topic: 'decentralization',
+        content: 'Bitcoin is decentralized - no single person or company controls it. It\'s run by a network of computers worldwide.',
+        keywords: 'decentralized,control,network,computers'
+      }
+    ];
+
+    const stmt = db.prepare(`INSERT OR IGNORE INTO bitcoin_content (topic, content, keywords) VALUES (?, ?, ?)`);
+    sampleContent.forEach(item => {
+      stmt.run(item.topic, item.content, item.keywords);
+    });
+    stmt.finalize();
+  });
+}
+
+// File upload configuration
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+const upload = multer({ storage: storage });
+
+// API Routes
+
+// Serve 3D assets
+app.get('/api/assets/:id', (req, res) => {
+  const assetId = req.params.id;
+  
+  db.get('SELECT * FROM assets WHERE id = ?', [assetId], (err, row) => {
+    if (err) {
+      res.status(500).json({ error: 'Database error' });
+    } else if (row) {
+      res.json(row);
+    } else {
+      res.status(404).json({ error: 'Asset not found' });
+    }
+  });
+});
+
+// Get all assets
+app.get('/api/assets', (req, res) => {
+  db.all('SELECT * FROM assets', (err, rows) => {
+    if (err) {
+      res.status(500).json({ error: 'Database error' });
+    } else {
+      res.json(rows);
+    }
+  });
+});
+
+// Process speech input and return Bitcoin response
+app.post('/api/speech/process', (req, res) => {
+  const { text, sessionId } = req.body;
+  
+  if (!text) {
+    return res.status(400).json({ error: 'No text provided' });
+  }
+
+  // Simple keyword matching for Bitcoin content
+  const keywords = text.toLowerCase();
+  let response = '';
+
+  if (keywords.includes('hello') || keywords.includes('hi')) {
+    response = 'Hello! I\'m the Talking Orange, your guide to Bitcoin!';
+  } else if (keywords.includes('what is bitcoin') || keywords.includes('bitcoin')) {
+    response = 'Bitcoin is digital money that works without banks or governments. It\'s decentralized and gives you financial freedom!';
+  } else if (keywords.includes('benefits') || keywords.includes('why')) {
+    response = 'Bitcoin gives you financial freedom! You can send money anywhere, anytime, without asking permission.';
+  } else if (keywords.includes('decentralized') || keywords.includes('control')) {
+    response = 'Bitcoin is decentralized - no single person or company controls it. It\'s run by a network of computers worldwide.';
+  } else {
+    response = 'That\'s a great question! Bitcoin is revolutionary digital money that gives you financial freedom. Would you like to know more about its benefits?';
+  }
+
+  // Log analytics
+  db.run('INSERT INTO analytics (session_id, event_type, data) VALUES (?, ?, ?)', 
+    [sessionId || 'anonymous', 'speech_processed', JSON.stringify({ input: text, response })], 
+    (err) => {
+      if (err) console.error('Analytics error:', err);
+    }
+  );
+
+  res.json({ 
+    response,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Generate QR code
+app.post('/api/qr/generate', (req, res) => {
+  const { url, options = {} } = req.body;
+  
+  if (!url) {
+    return res.status(400).json({ error: 'URL is required' });
+  }
+
+  QRCode.toDataURL(url, options, (err, qrCodeDataURL) => {
+    if (err) {
+      res.status(500).json({ error: 'QR code generation failed' });
+    } else {
+      res.json({ qrCode: qrCodeDataURL });
+    }
+  });
+});
+
+// Upload asset
+app.post('/api/assets/upload', upload.single('asset'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  const { name, type } = req.body;
+  const filePath = req.file.path;
+
+  db.run('INSERT INTO assets (name, type, path) VALUES (?, ?, ?)', 
+    [name, type, filePath], 
+    function(err) {
+      if (err) {
+        res.status(500).json({ error: 'Database error' });
+      } else {
+        res.json({ 
+          id: this.lastID, 
+          name, 
+          type, 
+          path: filePath 
+        });
+      }
+    }
+  );
+});
+
+// Analytics endpoint
+app.post('/api/analytics', (req, res) => {
+  const { sessionId, eventType, data } = req.body;
+  
+  db.run('INSERT INTO analytics (session_id, event_type, data) VALUES (?, ?, ?)', 
+    [sessionId, eventType, JSON.stringify(data)], 
+    (err) => {
+      if (err) {
+        res.status(500).json({ error: 'Analytics error' });
+      } else {
+        res.json({ success: true });
+      }
+    }
+  );
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    version: '1.0.0'
+  });
+});
+
+// Serve frontend
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/index.html'));
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Talking Orange server running on http://localhost:${PORT}`);
+  console.log(`📊 API endpoints available at http://localhost:${PORT}/api/`);
+  console.log(`🎯 Frontend served at http://localhost:${PORT}/`);
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\n🛑 Shutting down server...');
+  db.close((err) => {
+    if (err) {
+      console.error('Error closing database:', err.message);
+    } else {
+      console.log('Database connection closed.');
+    }
+    process.exit(0);
+  });
+});

@@ -1,0 +1,42 @@
+# Talking Orange AR Project - Development Requirements
+
+# Node.js and npm (JavaScript runtime and package manager)
+# Install via: curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt-get install -y nodejs
+
+# Python (for potential AI/ML features and Blender scripting)
+python3>=3.8
+python3-pip
+python3-venv
+
+# Development tools
+git
+curl
+wget
+build-essential
+
+# 3D Development
+# Blender (install via snap or download from blender.org)
+# sudo snap install blender --classic
+
+# Database
+sqlite3
+
+# Image processing (for QR codes and image assets)
+imagemagick
+libmagick++-dev
+
+# Audio processing (for voice features)
+ffmpeg
+libasound2-dev
+
+# Web development tools
+nginx (for local server testing)
+
+# Optional: Docker for containerized development
+# docker.io
+# docker-compose
+
+# System dependencies for Node.js native modules
+python3-dev
+libssl-dev
+libffi-dev

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Talking Orange - Bitcoin AR Experience</title>
+    <meta name="description" content="Experience Bitcoin through augmented reality with our talking orange character">
+    
+    <!-- AR.js and Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/ar.js@1.7.2/aframe/build/aframe-ar.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.156.1/build/three.min.js"></script>
+    
+    <!-- QR Code libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <div class="orange-loader"></div>
+            <h2>Loading Talking Orange...</h2>
+            <p>Preparing your AR experience</p>
+        </div>
+    </div>
+
+    <!-- Permission Request Screen -->
+    <div id="permission-screen" class="permission-screen hidden">
+        <div class="permission-content">
+            <div class="orange-icon">🍊</div>
+            <h1>Welcome to Talking Orange!</h1>
+            <p>To experience the magic of Bitcoin through AR, we need access to your camera and microphone.</p>
+            <div class="permission-buttons">
+                <button id="grant-permissions" class="btn btn-primary">Grant Permissions</button>
+                <button id="deny-permissions" class="btn btn-secondary">Maybe Later</button>
+            </div>
+            <div class="permission-info">
+                <p><strong>Camera:</strong> To detect the AR marker and show the 3D orange</p>
+                <p><strong>Microphone:</strong> To hear your questions about Bitcoin</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main AR Experience -->
+    <div id="ar-experience" class="ar-experience hidden">
+        <!-- AR.js Scene -->
+        <a-scene embedded arjs>
+            <!-- Camera -->
+            <a-marker-camera preset='hiro'></a-marker-camera>
+            
+            <!-- 3D Orange Character -->
+            <a-entity id="talking-orange" position="0 0 0" scale="1 1 1">
+                <!-- Orange body -->
+                <a-sphere radius="0.5" color="#FF8C00" position="0 0.5 0"></a-sphere>
+                
+                <!-- Eyes -->
+                <a-sphere radius="0.1" color="#000" position="-0.15 0.7 0.4"></a-sphere>
+                <a-sphere radius="0.1" color="#000" position="0.15 0.7 0.4"></a-sphere>
+                
+                <!-- Mouth -->
+                <a-cylinder radius="0.2" height="0.05" color="#000" position="0 0.3 0.4" rotation="90 0 0"></a-cylinder>
+                
+                <!-- Animation for breathing -->
+                <a-animation attribute="scale" to="1.05 1.05 1.05" direction="alternate" dur="2000" repeat="indefinite"></a-animation>
+            </a-entity>
+        </a-scene>
+
+        <!-- UI Overlay -->
+        <div class="ar-ui">
+            <div class="status-bar">
+                <div id="connection-status" class="status-indicator">🔴</div>
+                <div id="voice-status" class="status-indicator">🎤</div>
+            </div>
+            
+            <div class="voice-controls">
+                <button id="start-listening" class="voice-btn">🎤 Ask about Bitcoin</button>
+                <div id="listening-indicator" class="listening-indicator hidden">
+                    <div class="pulse"></div>
+                    <span>Listening...</span>
+                </div>
+            </div>
+            
+            <div class="response-area">
+                <div id="orange-response" class="response-bubble hidden">
+                    <div class="response-text"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Screen -->
+    <div id="error-screen" class="error-screen hidden">
+        <div class="error-content">
+            <div class="error-icon">⚠️</div>
+            <h2>Oops! Something went wrong</h2>
+            <p id="error-message">Unable to load the AR experience</p>
+            <button id="retry-btn" class="btn btn-primary">Try Again</button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/ar-manager.js"></script>
+    <script src="js/voice-manager.js"></script>
+    <script src="js/qr-manager.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
