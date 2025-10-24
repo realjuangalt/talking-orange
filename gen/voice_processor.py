@@ -140,33 +140,77 @@ class VoiceProcessor:
     
     def _generate_bitcoin_response(self, user_input: str) -> str:
         """
-        Generate Bitcoin evangelism response based on user input.
-        This is a placeholder - in production, this would use the LLM service.
+        Generate Bitcoin evangelism response using real LLM API.
+        Uses Venice AI API with Bitcoin evangelism prompt.
         """
-        input_lower = user_input.lower()
-        
-        # Bitcoin-related responses
-        if any(word in input_lower for word in ['bitcoin', 'crypto', 'blockchain', 'btc']):
-            responses = [
-                "Bitcoin is amazing! It's digital money that gives you financial freedom! 🍊",
-                "Bitcoin is revolutionary! It's decentralized, secure, and scarce!",
-                "Bitcoin is the future of money! It's digital gold that you can send anywhere!",
-                "Bitcoin gives you financial sovereignty! No banks, no governments, just you and your money!"
-            ]
-            import random
-            return random.choice(responses)
-        
-        elif any(word in input_lower for word in ['what', 'how', 'explain', 'tell']):
-            return "I'd love to explain Bitcoin! It's decentralized digital money that works without banks. What would you like to know more about?"
-        
-        elif any(word in input_lower for word in ['hello', 'hi', 'hey']):
-            return "Hello there! I'm the Talking Orange! 🍊 I'm here to tell you all about Bitcoin! What would you like to know?"
-        
-        elif any(word in input_lower for word in ['help', 'how']):
-            return "I'm here to help you understand Bitcoin! It's digital money that's secure, fast, and gives you control over your finances!"
-        
-        else:
-            return "That's interesting! Bitcoin is such an exciting topic! 🍊 What would you like to know about digital money and financial freedom?"
+        try:
+            import requests
+            import os
+            from dotenv import load_dotenv
+            
+            load_dotenv()
+            venice_api_key = os.getenv('VENICE_KEY')
+            
+            if not venice_api_key:
+                raise Exception("VENICE_KEY not found in environment variables")
+            
+            # Load Bitcoin evangelism prompt
+            prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', 'bitcoin_evangelism.txt')
+            system_prompt = ""
+            
+            if os.path.exists(prompt_path):
+                with open(prompt_path, 'r', encoding='utf-8') as f:
+                    system_prompt = f.read().strip()
+            else:
+                system_prompt = """You are the Talking Orange, a friendly and enthusiastic Bitcoin evangelist. Your mission is to educate people about Bitcoin in an engaging, accessible way.
+
+PERSONALITY:
+- Enthusiastic and optimistic about Bitcoin
+- Patient and educational
+- Use simple, clear language
+- Be encouraging and supportive
+- Occasionally use orange-themed expressions
+- Keep responses under 100 words
+- End with a question to keep conversation going
+
+You have access to web search capabilities, so you can provide up-to-date information about Bitcoin when needed."""
+            
+            # Call Venice AI API
+            url = "https://api.venice.ai/api/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {venice_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_input}
+                ],
+                "model": "llama-3.3-70b",
+                "temperature": 0.7,
+                "max_tokens": 150,
+                "venice_parameters": {
+                    "enable_web_search": "auto"
+                },
+                "parallel_tool_calls": True
+            }
+            
+            response = requests.post(url, json=payload, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "choices" in data and data["choices"]:
+                    return data["choices"][0]["message"]["content"].strip()
+                else:
+                    raise Exception("No valid response from LLM")
+            else:
+                raise Exception(f"LLM API error: {response.status_code} - {response.text}")
+                
+        except Exception as e:
+            logger.error(f"Bitcoin response generation failed: {e}")
+            # Fallback to simple Bitcoin response
+            return f"Bitcoin is amazing! It's digital money that gives you financial freedom! 🍊 What would you like to know about Bitcoin?"
     
     def get_status(self) -> Dict[str, Any]:
         """Get comprehensive status of voice processing services."""

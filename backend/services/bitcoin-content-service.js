@@ -173,12 +173,17 @@ PERSONALITY:
         } = options;
 
         try {
-            // Create a Python script that uses the existing text generator
+            // Create a Python script that uses the existing text generator with real API calls
             const pythonScript = `
 import sys
 import os
 import asyncio
 import json
+import requests
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add gen directory to path
 gen_dir = "${this.genDir}"

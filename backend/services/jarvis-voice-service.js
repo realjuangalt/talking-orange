@@ -286,6 +286,11 @@ except Exception as e:
         const pythonScript = `
 import requests
 import json
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 api_key = "${this.veniceApiKey}"
 system_prompt = """${systemPrompt.replace(/"/g, '\\"')}"""
@@ -303,6 +308,7 @@ payload = {
     ],
     "model": "llama-3.3-70b",
     "temperature": 0.7,
+    "max_tokens": 150,
     "venice_parameters": {
         "enable_web_search": "auto"
     },
@@ -313,7 +319,8 @@ try:
     response = requests.post(
         "https://api.venice.ai/api/v1/chat/completions",
         json=payload,
-        headers=headers
+        headers=headers,
+        timeout=30
     )
     
     if response.status_code == 200:
