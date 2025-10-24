@@ -12,6 +12,7 @@ const WhisperService = require('./services/whisper-service');
 const TTSService = require('./services/tts-service');
 const LLMService = require('./services/llm-service');
 const BitcoinContentService = require('./services/bitcoin-content-service');
+const JarvisVoiceService = require('./services/jarvis-voice-service');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,6 +22,7 @@ const whisperService = new WhisperService();
 const ttsService = new TTSService();
 const llmService = new LLMService();
 const bitcoinContentService = new BitcoinContentService();
+const jarvisVoiceService = new JarvisVoiceService();
 
 // Middleware
 app.use(helmet());
@@ -157,19 +159,27 @@ app.post('/api/speech/process', async (req, res) => {
       return res.status(400).json({ error: 'No text or audio provided' });
     }
 
-    // Generate response using Bitcoin Content Service (preferred) or LLM fallback
+    // Generate response using Jarvis Voice Service (preferred), Bitcoin Content Service, or LLM fallback
     let llmResponse;
     try {
-      llmResponse = await bitcoinContentService.generateBitcoinResponse(userInput, {
+      llmResponse = await jarvisVoiceService.generateBitcoinResponse(userInput, {
         sessionId: sessionId || 'anonymous',
         bitcoinContext: true
       });
     } catch (error) {
-      console.warn('Bitcoin Content Service failed, falling back to LLM:', error.message);
-      llmResponse = await llmService.generateResponse(userInput, {
-        sessionId: sessionId || 'anonymous',
-        bitcoinContext: true
-      });
+      console.warn('Jarvis Voice Service failed, trying Bitcoin Content Service:', error.message);
+      try {
+        llmResponse = await bitcoinContentService.generateBitcoinResponse(userInput, {
+          sessionId: sessionId || 'anonymous',
+          bitcoinContext: true
+        });
+      } catch (error2) {
+        console.warn('Bitcoin Content Service failed, falling back to LLM:', error2.message);
+        llmResponse = await llmService.generateResponse(userInput, {
+          sessionId: sessionId || 'anonymous',
+          bitcoinContext: true
+        });
+      }
     }
 
     // Generate speech audio
@@ -322,6 +332,7 @@ async function startServer() {
     await ttsService.initialize();
     await llmService.initialize();
     await bitcoinContentService.initialize();
+    await jarvisVoiceService.initialize();
     
     console.log('✅ All services initialized');
     
@@ -334,6 +345,7 @@ async function startServer() {
       console.log(`🔊 TTS: ${ttsService.getStatus().initialized ? '✅' : '❌'}`);
       console.log(`🤖 LLM: ${llmService.getStatus().initialized ? '✅' : '❌'}`);
       console.log(`₿ Bitcoin AI: ${bitcoinContentService.getStatus().initialized ? '✅' : '❌'}`);
+      console.log(`🎭 Jarvis Voice: ${jarvisVoiceService.getStatus().initialized ? '✅' : '❌'}`);
     });
     
   } catch (error) {
