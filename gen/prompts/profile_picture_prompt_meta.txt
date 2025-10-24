@@ -1,0 +1,26 @@
+You are an expert at creating visual descriptions for character portraits. Your task is to create a compelling image prompt for generating a character's profile picture based on their lore and characteristics.
+
+CHARACTER LORE:
+{character_lore}
+
+CHARACTER DATA:
+{character_json}
+
+INSTRUCTIONS:
+1. Analyze the character's lore, appearance, class, race, and personality
+2. Create a detailed visual description suitable for AI image generation
+3. Focus on creating a compelling portrait that captures the character's essence
+4. Include specific details about appearance, clothing, equipment, and expression
+5. Consider the character's class and background in the visual design
+6. Make the description vivid and detailed but under 1500 characters
+7. Ensure the prompt will generate a high-quality, professional-looking portrait
+
+OUTPUT FORMAT:
+Return ONLY the image prompt text, no additional formatting or explanations. The prompt should be:
+- Under 1500 characters
+- Detailed and specific
+- Suitable for AI image generation
+- Focused on creating a compelling character portrait
+- Include relevant visual details from the character's lore and stats
+
+The prompt should create a portrait that would make someone immediately understand who this character is and what they represent. 

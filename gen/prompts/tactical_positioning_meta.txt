@@ -1,0 +1,119 @@
+You are a D&D 5e tactical positioning expert. Create optimal starting positions for an encounter based on the provided information.
+
+ENCOUNTER LORE:
+{encounter_lore}
+
+ENVIRONMENT:
+{environment}
+
+NPCs:
+{npcs_summary}
+
+Sample Player Characters:
+{sample_players}
+
+TACTICAL POSITIONING RULES:
+1. Analyze each NPC's class, abilities, combat_role, and range_type to determine optimal positioning
+2. Create tactical starting positions for a 100x100 grid battlefield (5ft per unit)
+3. Position NPCs based on their combat role and range capabilities:
+
+   COMBAT ROLE: "frontline" (Fighter, Paladin, Barbarian)
+   - Place in FRONT LINES (X: 40-60, Y: 20-40)
+   - Close to enemy spawn points for immediate engagement
+   - Spread out to avoid area effects
+   - Form a defensive wall between enemies and allies
+
+   COMBAT ROLE: "backline" (Wizard, Sorcerer, Warlock)
+   - Place in REAR LINES (X: 15-35, Y: 5-25)
+   - Protected by melee fighters
+   - Near edges for escape routes
+   - Avoid clustering to prevent area effect vulnerability
+   - Elevated positions when possible (higher Y values)
+
+   COMBAT ROLE: "midline" (Cleric, Druid, Bard)
+   - Place in CENTER-REAR (X: 25-45, Y: 10-25)
+   - Protected by front line fighters
+   - Able to reach all allies with spells
+   - Can move forward to heal or backward to cast
+
+   COMBAT ROLE: "flexible" (Rogue, Monk, Ranger)
+   - Place on FLANKS (X: 10-20 or 60-80, Y: 15-35)
+   - Near cover or concealment
+   - Able to flank enemies or escape
+   - Can move between front and back as needed
+
+   RANGE TYPE: "melee" (Fighter, Barbarian, Paladin, Monk)
+   - Must be close to enemies to attack effectively
+   - Place in front lines or flanks
+   - Consider movement speed for positioning
+
+   RANGE TYPE: "magic" (Wizard, Sorcerer, Warlock)
+   - Can attack from distance with spells
+   - Place in back lines for safety
+   - Need clear lines of sight to enemies
+   - Most vulnerable to melee attacks
+
+   RANGE TYPE: "ranged" (Ranger, Rogue with bow/crossbow)
+   - Can attack from distance with weapons
+   - Place in back lines or flanks
+   - Need clear lines of sight to enemies
+   - More mobile than magic users
+
+   RANGE TYPE: "mixed" (Cleric, Druid, Bard, Rogue, Ranger)
+   - Can fight at multiple ranges
+   - Place in midline or flexible positions
+   - Can adapt to combat situation
+
+4. 
+5. Keep it simple - no terrain features for now
+6. Use varied Y coordinates (0-99) to create tactical depth and spacing
+7. Ensure positions are balanced and make tactical sense
+
+ADDITIONAL TACTICAL CONSIDERATIONS:
+8. **Formation Strategy**: Don't cluster all NPCs in one area - spread them out tactically
+9. **Boss Positioning**: Place stronger/boss enemies further back or in protected positions
+10. **Line of Sight**: Ensure ranged NPCs have clear lines of sight to enemy spawn points
+11. **Defensive Depth**: Create multiple layers of defense (front, mid, back)
+12. **Flanking Opportunities**: Position flexible NPCs where they can flank enemies
+13. **Escape Routes**: Ensure spellcasters have escape paths to the edges
+14. **Cover Utilization**: Place NPCs near potential cover positions (edges, corners)
+15. **Threat Assessment**: Position tougher NPCs to protect weaker ones
+16. **Movement Considerations**: Consider each NPC's speed and movement capabilities
+17. **Area Effect Avoidance**: Spread out NPCs to avoid being caught in enemy area spells
+18. **Support Positioning**: Place healers where they can reach the most allies
+19. **Tactical Flexibility**: Allow for NPCs to move between positions as needed
+20. **Environmental Awareness**: Consider the environment type when positioning
+
+OUTPUT FORMAT:
+Return ONLY a valid JSON object with this exact structure:
+{{
+  "encounter_info": {{
+    "name": "Encounter name based on the lore",
+    "description": "Brief description of the encounter setup",
+    "environment": "Environment type (forest, dungeon, etc.)",
+    "difficulty": "medium"
+  }},
+  "spawn_points": {{
+    "player_spawns": [
+      {{
+        "spawn_id": "player_1",
+        "x": 10,
+        "y": 20,
+        "z": 0,
+        "description": "Front line position"
+      }}
+    ],
+    "npc_spawns": [
+      {{
+        "npc_name": "NPC Name",
+        "x": 50,
+        "y": 30,
+        "z": 0,
+        "is_enemy": true,
+        "spawn_description": "Tactical position description"
+      }}
+    ]
+  }}
+}}
+
+Do not include any explanatory text, markdown formatting, or additional content outside the JSON structure.

@@ -213,10 +213,19 @@ class TalkingOrangeApp {
             // Show response
             this.showOrangeResponse(response.response);
             
+            // Play audio response if available
+            if (response.audioUrl) {
+                await this.playAudioResponse(response.audioUrl);
+            } else {
+                // Fallback to browser TTS
+                this.speakText(response.response);
+            }
+            
             // Log analytics
             this.logAnalytics('speech_processed', {
                 input: text,
                 response: response.response,
+                audioUrl: response.audioUrl,
                 timestamp: new Date().toISOString()
             });
             
@@ -322,6 +331,49 @@ class TalkingOrangeApp {
 
     generateSessionId() {
         return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    // Audio response methods
+    async playAudioResponse(audioUrl) {
+        try {
+            const audio = new Audio(audioUrl);
+            audio.preload = 'auto';
+            
+            return new Promise((resolve, reject) => {
+                audio.onended = () => resolve();
+                audio.onerror = (error) => reject(error);
+                audio.play().catch(reject);
+            });
+        } catch (error) {
+            console.error('Audio playback failed:', error);
+            // Fallback to browser TTS
+            this.speakText('Sorry, I had trouble playing the audio response.');
+        }
+    }
+
+    speakText(text) {
+        if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.9;
+            utterance.pitch = 1.1;
+            utterance.volume = 1.0;
+            
+            // Try to find a good voice
+            const voices = speechSynthesis.getVoices();
+            const preferredVoice = voices.find(voice => 
+                voice.name.includes('Google') || 
+                voice.name.includes('Microsoft') ||
+                voice.lang.startsWith('en')
+            );
+            
+            if (preferredVoice) {
+                utterance.voice = preferredVoice;
+            }
+            
+            speechSynthesis.speak(utterance);
+        } else {
+            console.warn('Speech synthesis not supported');
+        }
     }
 }
 

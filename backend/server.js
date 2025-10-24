@@ -7,8 +7,18 @@ const multer = require('multer');
 const QRCode = require('qrcode');
 const WebSocket = require('ws');
 
+// Import services
+const WhisperService = require('./services/whisper-service');
+const TTSService = require('./services/tts-service');
+const LLMService = require('./services/llm-service');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Initialize services
+const whisperService = new WhisperService();
+const ttsService = new TTSService();
+const llmService = new LLMService();
 
 // Middleware
 app.use(helmet());
@@ -123,41 +133,76 @@ app.get('/api/assets', (req, res) => {
 });
 
 // Process speech input and return Bitcoin response
-app.post('/api/speech/process', (req, res) => {
-  const { text, sessionId } = req.body;
-  
-  if (!text) {
-    return res.status(400).json({ error: 'No text provided' });
-  }
-
-  // Simple keyword matching for Bitcoin content
-  const keywords = text.toLowerCase();
-  let response = '';
-
-  if (keywords.includes('hello') || keywords.includes('hi')) {
-    response = 'Hello! I\'m the Talking Orange, your guide to Bitcoin!';
-  } else if (keywords.includes('what is bitcoin') || keywords.includes('bitcoin')) {
-    response = 'Bitcoin is digital money that works without banks or governments. It\'s decentralized and gives you financial freedom!';
-  } else if (keywords.includes('benefits') || keywords.includes('why')) {
-    response = 'Bitcoin gives you financial freedom! You can send money anywhere, anytime, without asking permission.';
-  } else if (keywords.includes('decentralized') || keywords.includes('control')) {
-    response = 'Bitcoin is decentralized - no single person or company controls it. It\'s run by a network of computers worldwide.';
-  } else {
-    response = 'That\'s a great question! Bitcoin is revolutionary digital money that gives you financial freedom. Would you like to know more about its benefits?';
-  }
-
-  // Log analytics
-  db.run('INSERT INTO analytics (session_id, event_type, data) VALUES (?, ?, ?)', 
-    [sessionId || 'anonymous', 'speech_processed', JSON.stringify({ input: text, response })], 
-    (err) => {
-      if (err) console.error('Analytics error:', err);
+app.post('/api/speech/process', async (req, res) => {
+  try {
+    const { text, sessionId, audioData } = req.body;
+    
+    let userInput = text;
+    
+    // If audio data is provided, transcribe it first
+    if (audioData && !text) {
+      try {
+        const audioBuffer = Buffer.from(audioData, 'base64');
+        const transcription = await whisperService.transcribeAudio(audioBuffer);
+        userInput = transcription.text;
+      } catch (error) {
+        console.error('Speech transcription failed:', error);
+        return res.status(500).json({ error: 'Speech transcription failed' });
+      }
     }
-  );
+    
+    if (!userInput) {
+      return res.status(400).json({ error: 'No text or audio provided' });
+    }
 
-  res.json({ 
-    response,
-    timestamp: new Date().toISOString()
-  });
+    // Generate response using LLM
+    const llmResponse = await llmService.generateResponse(userInput, {
+      sessionId: sessionId || 'anonymous',
+      bitcoinContext: true
+    });
+
+    // Generate speech audio
+    let audioUrl = null;
+    try {
+      const ttsResult = await ttsService.synthesizeSpeech(llmResponse.text, {
+        voice: 'default',
+        language: 'en-US'
+      });
+      
+      // Save audio file and return URL
+      const audioFilename = `speech_${Date.now()}.wav`;
+      const audioPath = path.join(__dirname, '../public/audio', audioFilename);
+      fs.writeFileSync(audioPath, ttsResult.audioBuffer);
+      audioUrl = `/audio/${audioFilename}`;
+      
+    } catch (error) {
+      console.error('TTS synthesis failed:', error);
+      // Continue without audio
+    }
+
+    // Log analytics
+    db.run('INSERT INTO analytics (session_id, event_type, data) VALUES (?, ?, ?)', 
+      [sessionId || 'anonymous', 'speech_processed', JSON.stringify({ 
+        input: userInput, 
+        response: llmResponse.text,
+        audioUrl: audioUrl
+      })], 
+      (err) => {
+        if (err) console.error('Analytics error:', err);
+      }
+    );
+
+    res.json({ 
+      response: llmResponse.text,
+      audioUrl: audioUrl,
+      timestamp: new Date().toISOString(),
+      model: llmResponse.model
+    });
+    
+  } catch (error) {
+    console.error('Speech processing error:', error);
+    res.status(500).json({ error: 'Speech processing failed' });
+  }
 });
 
 // Generate QR code
@@ -233,12 +278,36 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Talking Orange server running on http://localhost:${PORT}`);
-  console.log(`📊 API endpoints available at http://localhost:${PORT}/api/`);
-  console.log(`🎯 Frontend served at http://localhost:${PORT}/`);
-});
+// Initialize services and start server
+async function startServer() {
+  try {
+    console.log('🔧 Initializing services...');
+    
+    // Initialize all services
+    await whisperService.initialize();
+    await ttsService.initialize();
+    await llmService.initialize();
+    
+    console.log('✅ All services initialized');
+    
+    // Start server
+    app.listen(PORT, () => {
+      console.log(`🚀 Talking Orange server running on http://localhost:${PORT}`);
+      console.log(`📊 API endpoints available at http://localhost:${PORT}/api/`);
+      console.log(`🎯 Frontend served at http://localhost:${PORT}/`);
+      console.log(`🎤 Whisper: ${whisperService.getStatus().initialized ? '✅' : '❌'}`);
+      console.log(`🔊 TTS: ${ttsService.getStatus().initialized ? '✅' : '❌'}`);
+      console.log(`🤖 LLM: ${llmService.getStatus().initialized ? '✅' : '❌'}`);
+    });
+    
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Start the server
+startServer();
 
 // Graceful shutdown
 process.on('SIGINT', () => {

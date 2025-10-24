@@ -1,0 +1,39 @@
+{
+  "ai_settings": {
+    "character_generation": {
+      "model": "llama-3.3-70b",
+      "endpoint": "https://api.venice.ai/api/v1/chat/completions"
+    },
+    "prompt_polishing": {
+      "model": "llama-3.3-70b",
+      "endpoint": "https://api.venice.ai/api/v1/chat/completions"
+    },
+    "storytelling": {
+      "model": "llama-3.3-70b",
+      "endpoint": "https://api.venice.ai/api/v1/chat/completions"
+    },
+    "background_images": {
+      "model": "venice-sd35",
+      "endpoint": "https://api.venice.ai/api/v1/image/generate"
+    },
+    "profile_pictures": {
+      "model": "venice-sd35",
+      "endpoint": "https://api.venice.ai/api/v1/image/generate"
+    },
+    "action_images": {
+      "model": "venice-sd35",
+      "endpoint": "https://api.venice.ai/api/v1/image/generate"
+    },
+    "lore_sheet": {
+      "model": "llama-3.3-70b",
+      "endpoint": "https://api.venice.ai/api/v1/chat/completions"
+    },
+    "image_prompts": {
+      "model": "llama-3.3-70b",
+      "endpoint": "https://api.venice.ai/api/v1/chat/completions"
+    }
+  },
+  "game_settings": {
+    "npc_images_enabled": true
+  }
+}

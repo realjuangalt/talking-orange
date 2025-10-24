@@ -29,6 +29,23 @@ libmagick++-dev
 ffmpeg
 libasound2-dev
 
+# TTS engines
+espeak
+festival
+pico2wave
+
+# Whisper dependencies
+python3-dev
+libssl-dev
+libffi-dev
+portaudio19-dev
+python3-pyaudio
+
+# Additional audio libraries
+libsndfile1-dev
+libasound2-dev
+libpulse-dev
+
 # Web development tools
 nginx (for local server testing)
 
