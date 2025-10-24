@@ -1,7 +1,7 @@
 """
-Voice Processor Module
-Combines voice-to-text and text-to-voice functionality for Talking Orange AR project.
-Provides a unified interface for voice processing with Bitcoin evangelism focus.
+Main Voice Processing Module for Talking Orange AR Project
+Handles voice-to-text, text-to-voice, and Bitcoin evangelism responses.
+Uses individual modules as needed for clean, modular architecture.
 """
 
 import os
@@ -9,19 +9,27 @@ import sys
 import json
 import logging
 import tempfile
+import asyncio
 from pathlib import Path
 from typing import Optional, Dict, Any, Union
+from dotenv import load_dotenv
+
+# Import our voice processing modules
 from voice_to_text import VoiceToTextService
 from text_to_voice import TextToVoiceService
+from text_generator import TextGenerator
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class VoiceProcessor:
+# Load environment variables
+load_dotenv()
+
+class TalkingOrangeVoiceSystem:
     """
-    Unified voice processing service combining STT and TTS capabilities.
-    Optimized for Talking Orange AR project with Bitcoin evangelism focus.
+    Main voice processing system for Talking Orange AR project.
+    Coordinates STT, TTS, and Bitcoin evangelism responses.
     """
     
     def __init__(self, model_dir: str = None, voice_dir: str = None):
@@ -31,13 +39,14 @@ class VoiceProcessor:
         # Initialize services
         self.stt_service = VoiceToTextService(model_dir=self.model_dir)
         self.tts_service = TextToVoiceService(voice_dir=self.voice_dir)
+        self.text_generator = TextGenerator()
         
         self.initialized = False
         
-    def initialize(self) -> bool:
-        """Initialize both STT and TTS services."""
+    async def initialize(self) -> bool:
+        """Initialize all voice processing services."""
         try:
-            logger.info("Initializing Voice Processor...")
+            logger.info("Initializing Talking Orange Voice System...")
             
             # Initialize STT service
             if not self.stt_service.initialize():
@@ -45,18 +54,18 @@ class VoiceProcessor:
                 return False
             
             # TTS service doesn't need explicit initialization
-            logger.info("Voice Processor initialized successfully")
+            logger.info("Talking Orange Voice System initialized successfully")
             self.initialized = True
             return True
             
         except Exception as e:
-            logger.error(f"Voice Processor initialization failed: {e}")
+            logger.error(f"Voice system initialization failed: {e}")
             return False
     
-    def process_voice_input(self, audio_input: Union[str, bytes], 
-                           language: str = "en", 
-                           tts_voice: str = "default",
-                           tts_engine: str = "auto") -> Dict[str, Any]:
+    async def process_voice_input(self, audio_input: Union[str, bytes], 
+                                 language: str = "en", 
+                                 tts_voice: str = "default",
+                                 tts_engine: str = "auto") -> Dict[str, Any]:
         """
         Process voice input: transcribe speech and generate response audio.
         
@@ -71,7 +80,7 @@ class VoiceProcessor:
         """
         try:
             if not self.initialized:
-                raise Exception("Voice Processor not initialized")
+                raise Exception("Voice system not initialized")
             
             # Step 1: Transcribe audio
             logger.info("Transcribing audio input...")
@@ -85,8 +94,8 @@ class VoiceProcessor:
             transcription = stt_result["text"]
             logger.info(f"Transcription: {transcription}")
             
-            # Step 2: Generate Bitcoin response (placeholder for now)
-            response_text = self._generate_bitcoin_response(transcription)
+            # Step 2: Generate Bitcoin response using real LLM
+            response_text = await self._generate_bitcoin_response(transcription)
             logger.info(f"Response: {response_text}")
             
             # Step 3: Synthesize response audio
@@ -113,7 +122,7 @@ class VoiceProcessor:
             logger.error(f"Voice processing failed: {e}")
             raise Exception(f"Voice processing error: {str(e)}")
     
-    def transcribe_only(self, audio_input: Union[str, bytes], language: str = "en") -> str:
+    async def transcribe_only(self, audio_input: Union[str, bytes], language: str = "en") -> str:
         """Transcribe audio input only."""
         try:
             if isinstance(audio_input, str):
@@ -127,8 +136,8 @@ class VoiceProcessor:
             logger.error(f"Transcription failed: {e}")
             raise Exception(f"Transcription error: {str(e)}")
     
-    def synthesize_only(self, text: str, voice: str = "default", 
-                       language: str = "en", engine: str = "auto") -> bytes:
+    async def synthesize_only(self, text: str, voice: str = "default", 
+                             language: str = "en", engine: str = "auto") -> bytes:
         """Synthesize text to speech only."""
         try:
             result = self.tts_service.synthesize_speech(text, voice, language, engine)
@@ -138,22 +147,12 @@ class VoiceProcessor:
             logger.error(f"TTS synthesis failed: {e}")
             raise Exception(f"TTS synthesis error: {str(e)}")
     
-    def _generate_bitcoin_response(self, user_input: str) -> str:
+    async def _generate_bitcoin_response(self, user_input: str) -> str:
         """
         Generate Bitcoin evangelism response using real LLM API.
         Uses Venice AI API with Bitcoin evangelism prompt.
         """
         try:
-            import requests
-            import os
-            from dotenv import load_dotenv
-            
-            load_dotenv()
-            venice_api_key = os.getenv('VENICE_KEY')
-            
-            if not venice_api_key:
-                raise Exception("VENICE_KEY not found in environment variables")
-            
             # Load Bitcoin evangelism prompt
             prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', 'bitcoin_evangelism.txt')
             system_prompt = ""
@@ -175,37 +174,18 @@ PERSONALITY:
 
 You have access to web search capabilities, so you can provide up-to-date information about Bitcoin when needed."""
             
-            # Call Venice AI API
-            url = "https://api.venice.ai/api/v1/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {venice_api_key}",
-                "Content-Type": "application/json"
-            }
+            # Use the text generator for real LLM response
+            response = await self.text_generator.generate_text(
+                prompt=f"System: {system_prompt}\n\nUser: {user_input}",
+                model="llama-3.3-70b",
+                max_tokens=150,
+                temperature=0.7
+            )
             
-            payload = {
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_input}
-                ],
-                "model": "llama-3.3-70b",
-                "temperature": 0.7,
-                "max_tokens": 150,
-                "venice_parameters": {
-                    "enable_web_search": "auto"
-                },
-                "parallel_tool_calls": True
-            }
-            
-            response = requests.post(url, json=payload, headers=headers, timeout=30)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "choices" in data and data["choices"]:
-                    return data["choices"][0]["message"]["content"].strip()
-                else:
-                    raise Exception("No valid response from LLM")
+            if response:
+                return response.strip()
             else:
-                raise Exception(f"LLM API error: {response.status_code} - {response.text}")
+                raise Exception("No response from LLM")
                 
         except Exception as e:
             logger.error(f"Bitcoin response generation failed: {e}")
@@ -231,33 +211,75 @@ You have access to web search capabilities, so you can provide up-to-date inform
         return self.tts_service.available_engines
 
 # Convenience functions for easy usage
-def process_voice_file(audio_path: str, language: str = "en", 
-                      tts_voice: str = "default", tts_engine: str = "auto") -> Dict[str, Any]:
+async def process_voice_file(audio_path: str, language: str = "en", 
+                           tts_voice: str = "default", tts_engine: str = "auto") -> Dict[str, Any]:
     """Process voice file and return transcription + response audio."""
-    processor = VoiceProcessor()
-    if processor.initialize():
-        return processor.process_voice_input(audio_path, language, tts_voice, tts_engine)
+    system = TalkingOrangeVoiceSystem()
+    if await system.initialize():
+        return await system.process_voice_input(audio_path, language, tts_voice, tts_engine)
     else:
-        raise Exception("Failed to initialize Voice Processor")
+        raise Exception("Failed to initialize Voice System")
 
-def process_voice_buffer(audio_buffer: bytes, language: str = "en", 
-                        tts_voice: str = "default", tts_engine: str = "auto") -> Dict[str, Any]:
+async def process_voice_buffer(audio_buffer: bytes, language: str = "en", 
+                              tts_voice: str = "default", tts_engine: str = "auto") -> Dict[str, Any]:
     """Process voice buffer and return transcription + response audio."""
-    processor = VoiceProcessor()
-    if processor.initialize():
-        return processor.process_voice_input(audio_buffer, language, tts_voice, tts_engine)
+    system = TalkingOrangeVoiceSystem()
+    if await system.initialize():
+        return await system.process_voice_input(audio_buffer, language, tts_voice, tts_engine)
     else:
-        raise Exception("Failed to initialize Voice Processor")
+        raise Exception("Failed to initialize Voice System")
 
-# Example usage
-if __name__ == "__main__":
-    # Test the voice processor
-    processor = VoiceProcessor()
-    
-    if processor.initialize():
-        print("✅ Voice Processor initialized successfully")
-        print(f"Status: {processor.get_status()}")
-        print(f"Available TTS engines: {processor.get_available_engines()}")
-        print(f"Available voices: {processor.get_available_voices()}")
+async def transcribe_audio(audio_input: Union[str, bytes], language: str = "en") -> str:
+    """Transcribe audio input only."""
+    system = TalkingOrangeVoiceSystem()
+    if await system.initialize():
+        return await system.transcribe_only(audio_input, language)
     else:
-        print("❌ Voice Processor initialization failed")
+        raise Exception("Failed to initialize Voice System")
+
+async def synthesize_speech(text: str, voice: str = "default", 
+                           language: str = "en", engine: str = "auto") -> bytes:
+    """Synthesize text to speech only."""
+    system = TalkingOrangeVoiceSystem()
+    if await system.initialize():
+        return await system.synthesize_only(text, voice, language, engine)
+    else:
+        raise Exception("Failed to initialize Voice System")
+
+# Example usage and testing
+async def main():
+    """Main function for testing the voice system."""
+    try:
+        print("🍊 Talking Orange Voice System Test")
+        print("=" * 40)
+        
+        # Initialize system
+        system = TalkingOrangeVoiceSystem()
+        
+        if await system.initialize():
+            print("✅ Voice System initialized successfully")
+            print(f"Status: {system.get_status()}")
+            print(f"Available TTS engines: {system.get_available_engines()}")
+            print(f"Available voices: {system.get_available_voices()}")
+            
+            # Test TTS synthesis
+            try:
+                print("\n🔊 Testing TTS synthesis...")
+                audio_data = await system.synthesize_only(
+                    "Hello! I am the Talking Orange! 🍊 I'm here to tell you all about Bitcoin!",
+                    "default", "en", "auto"
+                )
+                print(f"✅ TTS synthesis successful: {len(audio_data)} bytes")
+            except Exception as e:
+                print(f"⚠️ TTS synthesis test failed: {e}")
+            
+            print("\n🎉 Talking Orange Voice System test completed!")
+            
+        else:
+            print("❌ Voice System initialization failed")
+            
+    except Exception as e:
+        print(f"❌ Test failed: {str(e)}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
