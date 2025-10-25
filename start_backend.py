@@ -9,6 +9,10 @@ import sys
 import subprocess
 import logging
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -42,12 +46,8 @@ def install_dependencies():
     try:
         logger.info("🔧 Installing Python dependencies...")
         
-        # Install backend dependencies
-        subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', 'backend/requirements.txt'], 
-                      check=True, capture_output=True)
-        
-        # Install gen system dependencies
-        subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', 'gen/requirements-python.txt'], 
+        # Install minimal dependencies only
+        subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', 'requirements-minimal.txt'], 
                       check=True, capture_output=True)
         
         logger.info("✅ Dependencies installed successfully")

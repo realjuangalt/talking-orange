@@ -1,12 +1,11 @@
-# Talking Orange AR Project - Development Requirements
+# Talking Orange AR Project - System Dependencies
+# Install with: sudo apt-get install -y $(cat requirements.txt)
 
-# Node.js and npm (JavaScript runtime and package manager)
-# Install via: curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt-get install -y nodejs
-
-# Python (for potential AI/ML features and Blender scripting)
+# Python runtime and tools
 python3>=3.8
 python3-pip
 python3-venv
+python3-dev
 
 # Development tools
 git
@@ -14,46 +13,40 @@ curl
 wget
 build-essential
 
-# 3D Development
-# Blender (install via snap or download from blender.org)
-# sudo snap install blender --classic
+# Audio processing (for voice features)
+ffmpeg
+libasound2-dev
+libsndfile1-dev
+libpulse-dev
+portaudio19-dev
+python3-pyaudio
 
-# Database
-sqlite3
+# TTS engines
+espeak
+festival
+libttspico-utils
+
+# Whisper dependencies
+libssl-dev
+libffi-dev
 
 # Image processing (for QR codes and image assets)
 imagemagick
 libmagick++-dev
 
-# Audio processing (for voice features)
-ffmpeg
-libasound2-dev
-
-# TTS engines
-espeak
-festival
-pico2wave
-
-# Whisper dependencies
-python3-dev
-libssl-dev
-libffi-dev
-portaudio19-dev
-python3-pyaudio
-
-# Additional audio libraries
-libsndfile1-dev
-libasound2-dev
-libpulse-dev
+# Database
+sqlite3
 
 # Web development tools
-nginx (for local server testing)
+nginx
+
+# Node.js (for frontend development)
+# Install via: curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt-get install -y nodejs
+
+# 3D Development
+# Blender (install via snap or download from blender.org)
+# sudo snap install blender --classic
 
 # Optional: Docker for containerized development
 # docker.io
 # docker-compose
-
-# System dependencies for Node.js native modules
-python3-dev
-libssl-dev
-libffi-dev

@@ -8,29 +8,9 @@ Flask-CORS>=4.0.0
 # Environment and configuration
 python-dotenv>=1.0.0
 
-# Async support
-asyncio
-
 # HTTP requests
 requests>=2.28.0
 
 # Audio processing
 pydub>=0.25.1
 soundfile>=0.12.1
-
-# Voice processing (from gen system)
-# These are installed in the gen directory
-# whisper>=1.1.10
-# torch>=1.13.0
-# torchaudio>=0.13.0
-# gtts>=2.3.0
-# pyttsx3>=2.90
-
-# System utilities
-pathlib
-logging
-json
-os
-sys
-tempfile
-base64

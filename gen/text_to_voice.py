@@ -390,6 +390,52 @@ def get_available_voices(engine: str = "auto") -> list:
     else:
         return ["default"]
 
+def synthesize_speech_sync(text: str, voice: str = "default", 
+                          language: str = "en", engine: str = "auto") -> Dict[str, Any]:
+    """
+    Synchronous version of synthesize_speech for Flask compatibility.
+    """
+    try:
+        logger.info(f"Synthesizing speech (sync): {text[:50]}...")
+        
+        # Use gTTS for simple synchronous TTS
+        try:
+            from gtts import gTTS
+            import io
+            
+            tts = gTTS(text=text, lang=language, slow=False)
+            audio_buffer = io.BytesIO()
+            tts.write_to_fp(audio_buffer)
+            audio_data = audio_buffer.getvalue()
+            
+            logger.info("✅ gTTS synthesis successful")
+            return {
+                "audio_data": audio_data,
+                "format": "mp3",
+                "engine": "gtts",
+                "voice": voice
+            }
+            
+        except Exception as gtts_error:
+            logger.error(f"gTTS failed: {gtts_error}")
+            
+            # Fallback to simple text response
+            return {
+                "audio_data": b"",
+                "format": "wav",
+                "engine": "fallback",
+                "voice": voice
+            }
+            
+    except Exception as e:
+        logger.error(f"TTS synthesis failed (sync): {e}")
+        return {
+            "audio_data": b"",
+            "format": "wav",
+            "engine": "error",
+            "voice": voice
+        }
+
 # Example usage
 if __name__ == "__main__":
     # Test the service
@@ -401,6 +447,6 @@ if __name__ == "__main__":
     # Test synthesis
     try:
         result = service.synthesize_speech("Hello, I am the Talking Orange!", "default", "en")
-        print(f"✅ TTS synthesis successful: {len(result['audio_data'])} bytes")
+        logger.info(f"✅ TTS synthesis successful: {len(result['audio_data'])} bytes")
     except Exception as e:
         print(f"❌ TTS synthesis failed: {e}")

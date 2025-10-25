@@ -97,3 +97,43 @@ jspm_packages/
 dist/
 build/
 out/
+
+# Audio files (generated at runtime)
+public/audio/
+*.wav
+*.mp3
+*.webm
+*.ogg
+
+# Python virtual environment
+venv/
+env/
+.venv/
+.env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Whisper models (large files)
+models/
+*.bin
+*.safetensors
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Test files
+test_*.py
+*_test.py

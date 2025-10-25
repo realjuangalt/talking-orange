@@ -8,6 +8,7 @@ import sys
 import json
 import logging
 import asyncio
+import time
 from pathlib import Path
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -19,10 +20,26 @@ if gen_dir not in sys.path:
     sys.path.insert(0, gen_dir)
 
 # Import our voice processing modules
-from main import TalkingOrangeVoiceSystem, process_voice_file, process_voice_buffer, transcribe_audio, synthesize_speech
+import importlib.util
+import sys
 
-# Load environment variables
-load_dotenv()
+# Load the main module from gen directory
+spec = importlib.util.spec_from_file_location("main", os.path.join(gen_dir, "main.py"))
+main_module = importlib.util.module_from_spec(spec)
+sys.modules["main"] = main_module
+spec.loader.exec_module(main_module)
+
+# Import the classes and functions we need
+TalkingOrangeVoiceSystem = main_module.TalkingOrangeVoiceSystem
+process_voice_file = main_module.process_voice_file
+process_voice_buffer = main_module.process_voice_buffer
+transcribe_audio = main_module.transcribe_audio
+synthesize_speech = main_module.synthesize_speech
+
+# Load environment variables from project root
+project_root = os.path.dirname(os.path.dirname(__file__))
+env_path = os.path.join(project_root, '.env')
+load_dotenv(env_path)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -35,29 +52,51 @@ CORS(app)
 # Global voice system instance
 voice_system = None
 
-@app.before_first_request
 def initialize_voice_system():
     """Initialize the voice processing system."""
     global voice_system
     try:
         logger.info("🎤 Initializing Talking Orange Voice System...")
+        
+        # Try to create the voice system
+        logger.info("🔧 Creating TalkingOrangeVoiceSystem instance...")
         voice_system = TalkingOrangeVoiceSystem()
+        logger.info("✅ TalkingOrangeVoiceSystem instance created")
         
         # Initialize asynchronously
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(voice_system.initialize())
+        logger.info("🔄 Running async initialization...")
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(voice_system.initialize())
+            logger.info(f"✅ Async initialization result: {result}")
+        except Exception as async_error:
+            logger.error(f"❌ Async initialization failed: {async_error}")
+            # Try synchronous initialization as fallback
+            logger.info("🔄 Trying synchronous initialization...")
+            result = voice_system.initialize_sync()
+            logger.info(f"✅ Sync initialization result: {result}")
         
         logger.info("✅ Voice System initialized successfully")
         
     except Exception as e:
         logger.error(f"❌ Voice System initialization failed: {e}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
         voice_system = None
+
+# Initialize voice system on startup
+initialize_voice_system()
 
 @app.route('/')
 def index():
     """Serve the main frontend page."""
     return send_from_directory('../frontend', 'index.html')
+
+@app.route('/print')
+def print_page():
+    """Serve the print demo page."""
+    return send_from_directory('../frontend', 'print.html')
 
 @app.route('/<path:filename>')
 def serve_static(filename):
@@ -68,13 +107,25 @@ def serve_static(filename):
 def health_check():
     """Health check endpoint."""
     try:
+        import time
+        logger.info(f"🔍 Health check - voice_system: {voice_system is not None}")
+        
+        if voice_system:
+            logger.info("🔍 Voice system exists, getting status...")
+            voice_status = voice_system.get_status()
+            logger.info(f"🔍 Voice system status: {voice_status}")
+        else:
+            logger.info("🔍 Voice system is None")
+            voice_status = {"initialized": False}
+        
         status = {
             "status": "healthy",
-            "voice_system": voice_system.get_status() if voice_system else {"initialized": False},
-            "timestamp": asyncio.get_event_loop().time() if asyncio.get_event_loop().is_running() else 0
+            "voice_system": voice_status,
+            "timestamp": time.time()
         }
         return jsonify(status)
     except Exception as e:
+        logger.error(f"❌ Health check error: {e}")
         return jsonify({"status": "unhealthy", "error": str(e)}), 500
 
 @app.route('/api/speech/process', methods=['POST'])
@@ -82,6 +133,8 @@ def process_speech():
     """Process speech input and return Bitcoin response with audio."""
     try:
         data = request.get_json()
+        logger.info(f"📥 Received speech request: {list(data.keys())}")
+        
         text = data.get('text', '')
         audio_data = data.get('audioData', '')
         session_id = data.get('sessionId', 'anonymous')
@@ -89,39 +142,80 @@ def process_speech():
         tts_voice = data.get('ttsVoice', 'default')
         tts_engine = data.get('ttsEngine', 'auto')
         
+        logger.info(f"🎤 Audio data present: {bool(audio_data)}, Text present: {bool(text)}")
+        logger.info(f"🌍 Language: {language}, Session: {session_id}")
+        
         if not voice_system:
+            logger.error("❌ Voice system not initialized")
+            logger.error(f"❌ Voice system object: {voice_system}")
+            logger.error(f"❌ Voice system type: {type(voice_system)}")
             return jsonify({"error": "Voice system not initialized"}), 500
         
         # Process the input
         if audio_data:
-            # Process audio input
-            audio_buffer = bytes.fromhex(audio_data) if isinstance(audio_data, str) else audio_data
-            result = asyncio.run(voice_system.process_voice_input(
-                audio_buffer, language, tts_voice, tts_engine
-            ))
+            # Process audio input - handle base64 encoded audio
+            logger.info(f"🎵 Processing audio data (length: {len(audio_data) if audio_data else 0})")
+            try:
+                import base64
+                audio_buffer = base64.b64decode(audio_data)
+                logger.info(f"🔊 Decoded audio buffer: {len(audio_buffer)} bytes")
+                logger.info(f"🔊 Audio buffer type: {type(audio_buffer)}")
+                logger.info(f"🔊 First 20 bytes: {audio_buffer[:20] if len(audio_buffer) > 20 else audio_buffer}")
+                
+                logger.info(f"🎤 Calling voice_system.process_voice_input_sync...")
+                result = voice_system.process_voice_input_sync(
+                    audio_buffer, language, tts_voice, tts_engine
+                )
+                logger.info(f"🎤 Voice processing result keys: {list(result.keys())}")
+                logger.info(f"🎤 Voice processing result audio_data length: {len(result.get('audio_data', b''))} bytes")
+            except Exception as e:
+                logger.error(f"❌ Audio processing error: {e}")
+                import traceback
+                logger.error(f"❌ Audio processing traceback: {traceback.format_exc()}")
+                return jsonify({"error": f"Audio processing failed: {str(e)}"}), 500
         elif text:
             # Process text input
-            result = asyncio.run(voice_system.process_voice_input(
+            logger.info(f"📝 Processing text input: {text[:50]}...")
+            result = voice_system.process_voice_input_sync(
                 text, language, tts_voice, tts_engine
-            ))
+            )
         else:
+            logger.error("❌ No text or audio provided")
             return jsonify({"error": "No text or audio provided"}), 400
         
         # Save audio response to file
-        audio_filename = f"speech_{session_id}_{int(asyncio.get_event_loop().time())}.wav"
+        import time
+        audio_filename = f"speech_{session_id}_{int(time.time())}.wav"
         audio_path = os.path.join('../public/audio', audio_filename)
         
-        # Ensure audio directory exists
-        os.makedirs(os.path.dirname(audio_path), exist_ok=True)
+        logger.info(f"💾 Saving audio response...")
+        logger.info(f"📁 Audio filename: {audio_filename}")
+        logger.info(f"📁 Audio path: {audio_path}")
+        logger.info(f"📊 Result keys: {list(result.keys())}")
+        logger.info(f"📊 Audio data type: {type(result.get('audio_data'))}")
+        logger.info(f"📊 Audio data length: {len(result.get('audio_data', b''))} bytes")
         
-        with open(audio_path, 'wb') as f:
-            f.write(result['audio_data'])
+        # Ensure audio directory exists
+        audio_dir = os.path.dirname(audio_path)
+        logger.info(f"📁 Audio directory: {audio_dir}")
+        os.makedirs(audio_dir, exist_ok=True)
+        logger.info(f"✅ Audio directory exists: {os.path.exists(audio_dir)}")
+        
+        # Write audio data
+        try:
+            with open(audio_path, 'wb') as f:
+                f.write(result['audio_data'])
+            logger.info(f"✅ Audio file saved successfully: {audio_path}")
+            logger.info(f"📊 File size after save: {os.path.getsize(audio_path)} bytes")
+        except Exception as e:
+            logger.error(f"❌ Failed to save audio file: {e}")
+            raise
         
         return jsonify({
             "transcription": result.get('transcription', ''),
             "response": result.get('response_text', ''),
             "audioUrl": f"/audio/{audio_filename}",
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": time.time(),
             "sttEngine": result.get('stt_engine', 'whisper'),
             "ttsEngine": result.get('tts_engine', 'auto'),
             "language": language,
@@ -129,8 +223,11 @@ def process_speech():
         })
         
     except Exception as e:
-        logger.error(f"Speech processing error: {e}")
-        return jsonify({"error": "Speech processing failed"}), 500
+        logger.error(f"❌ Speech processing error: {e}")
+        logger.error(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Speech processing failed: {str(e)}"}), 500
 
 @app.route('/api/speech/transcribe', methods=['POST'])
 def transcribe_speech():
@@ -148,12 +245,12 @@ def transcribe_speech():
         
         # Transcribe audio
         audio_buffer = bytes.fromhex(audio_data) if isinstance(audio_data, str) else audio_data
-        transcription = asyncio.run(voice_system.transcribe_only(audio_buffer, language))
+        transcription = voice_system.transcribe_only_sync(audio_buffer, language)
         
         return jsonify({
             "transcription": transcription,
             "language": language,
-            "timestamp": asyncio.get_event_loop().time()
+            "timestamp": time.time()
         })
         
     except Exception as e:
@@ -177,10 +274,17 @@ def synthesize_speech_endpoint():
             return jsonify({"error": "Voice system not initialized"}), 500
         
         # Synthesize speech
-        audio_data = asyncio.run(voice_system.synthesize_only(text, voice, language, engine))
+        try:
+            from gen.text_to_voice import synthesize_speech_sync
+            tts_result = synthesize_speech_sync(text, voice, language, engine)
+            audio_data = tts_result['audio_data']
+            logger.info(f"TTS result: {tts_result}")
+        except Exception as e:
+            logger.error(f"TTS synthesis error: {e}")
+            return jsonify({"error": f"TTS synthesis failed: {str(e)}"}), 500
         
         # Save audio to file
-        audio_filename = f"tts_{int(asyncio.get_event_loop().time())}.wav"
+        audio_filename = f"tts_{int(time.time())}.wav"
         audio_path = os.path.join('../public/audio', audio_filename)
         
         # Ensure audio directory exists
@@ -195,7 +299,7 @@ def synthesize_speech_endpoint():
             "voice": voice,
             "language": language,
             "engine": engine,
-            "timestamp": asyncio.get_event_loop().time()
+            "timestamp": time.time()
         })
         
     except Exception as e:
@@ -217,7 +321,7 @@ def generate_bitcoin_content():
         
         # Generate Bitcoin content
         prompt = f"Generate {content_type} Bitcoin content about {topic} for {difficulty} level, {length} length"
-        content = asyncio.run(voice_system._generate_bitcoin_response(prompt))
+        content = voice_system._generate_bitcoin_response_sync(prompt)
         
         return jsonify({
             "content": content,
@@ -225,7 +329,7 @@ def generate_bitcoin_content():
             "topic": topic,
             "difficulty": difficulty,
             "length": length,
-            "timestamp": asyncio.get_event_loop().time()
+            "timestamp": time.time()
         })
         
     except Exception as e:
@@ -245,7 +349,7 @@ def get_available_voices():
         return jsonify({
             "voices": voices,
             "engines": engines,
-            "timestamp": asyncio.get_event_loop().time()
+            "timestamp": time.time()
         })
         
     except Exception as e:

@@ -15,9 +15,15 @@ from typing import Optional, Dict, Any, Union
 from dotenv import load_dotenv
 
 # Import our voice processing modules
-from voice_to_text import VoiceToTextService
-from text_to_voice import TextToVoiceService
-from text_generator import TextGenerator
+try:
+    from .voice_to_text import VoiceToTextService
+    from .text_to_voice import TextToVoiceService
+    from .text_generator import TextGenerator
+except ImportError:
+    # Fallback for when called from backend
+    from voice_to_text import VoiceToTextService
+    from text_to_voice import TextToVoiceService
+    from text_generator import TextGenerator
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +39,7 @@ class TalkingOrangeVoiceSystem:
     """
     
     def __init__(self, model_dir: str = None, voice_dir: str = None):
-        self.model_dir = model_dir or os.getenv('MODEL_DIR', '/opt/jarvis_editor/2.0/models')
+        self.model_dir = model_dir or os.getenv('MODEL_DIR', str(Path(__file__).parent.parent / 'models'))
         self.voice_dir = voice_dir or os.getenv('VOICE_DIR', './voices')
         
         # Initialize services
@@ -61,6 +67,113 @@ class TalkingOrangeVoiceSystem:
         except Exception as e:
             logger.error(f"Voice system initialization failed: {e}")
             return False
+    
+    def initialize_sync(self) -> bool:
+        """Synchronous initialization for Flask compatibility."""
+        try:
+            logger.info("Initializing Talking Orange Voice System (sync)...")
+            
+            # Initialize STT service
+            if not self.stt_service.initialize():
+                logger.error("Failed to initialize STT service")
+                return False
+            
+            # TTS service doesn't need explicit initialization
+            logger.info("Talking Orange Voice System initialized successfully (sync)")
+            self.initialized = True
+            return True
+            
+        except Exception as e:
+            logger.error(f"Voice system initialization failed (sync): {e}")
+            return False
+    
+    def process_voice_input_sync(self, audio_input: Union[str, bytes], 
+                                language: str = "en", 
+                                tts_voice: str = "default",
+                                tts_engine: str = "auto") -> Dict[str, Any]:
+        """
+        Synchronous version of process_voice_input for Flask compatibility.
+        """
+        try:
+            logger.info("Processing voice input (sync)...")
+            
+            # Transcribe audio
+            if isinstance(audio_input, bytes):
+                transcription = self.stt_service.transcribe_audio_buffer(audio_input, language)
+                user_text = transcription["text"]
+            else:
+                user_text = audio_input
+            
+            logger.info(f"Transcribed text: {user_text}")
+            
+            # Generate Bitcoin response
+            response_text = self._generate_bitcoin_response_sync(user_text)
+            logger.info(f"Generated response: {response_text[:100]}...")
+            
+            # Synthesize speech
+            try:
+                from .text_to_voice import synthesize_speech_sync
+            except ImportError:
+                from text_to_voice import synthesize_speech_sync
+            tts_result = synthesize_speech_sync(response_text, voice=tts_voice, language=language, engine=tts_engine)
+            
+            return {
+                "transcription": user_text,
+                "response_text": response_text,
+                "audio_data": tts_result["audio_data"],
+                "stt_engine": "whisper",
+                "tts_engine": tts_result["engine"],
+                "tts_voice": tts_result["voice"]
+            }
+            
+        except Exception as e:
+            logger.error(f"Voice processing failed (sync): {e}")
+            return {
+                "transcription": "",
+                "response_text": "I'm having trouble processing your request. Please try again.",
+                "audio_data": b"",
+                "stt_engine": "error",
+                "tts_engine": "error",
+                "tts_voice": "error"
+            }
+    
+    def _generate_bitcoin_response_sync(self, user_input: str) -> str:
+        """Synchronous Bitcoin response generation using real LLM."""
+        try:
+            # Use the text generator for real LLM response
+            try:
+                from .text_generator import TextGenerator
+            except ImportError:
+                from text_generator import TextGenerator
+            
+            # Create Bitcoin evangelism prompt
+            bitcoin_prompt = f"""You are a friendly, enthusiastic Bitcoin evangelist. The user said: "{user_input}"
+
+Respond in a conversational, helpful way about Bitcoin. Be informative but not pushy. Keep responses under 100 words and make them engaging and educational.
+
+Focus on Bitcoin's key benefits: decentralization, security, scarcity, and financial sovereignty. Use simple language that anyone can understand."""
+
+            # Generate response using Venice AI
+            text_generator = TextGenerator()
+            
+            # Run the async function synchronously
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                response = loop.run_until_complete(
+                    text_generator.generate_text(bitcoin_prompt)
+                )
+                if response and response.strip():
+                    return response.strip()
+                else:
+                    raise Exception("No response from LLM")
+            finally:
+                loop.close()
+            
+        except Exception as e:
+            logger.error(f"LLM response generation failed: {e}")
+            return f"Sorry, I'm having trouble connecting to my AI brain right now. Error: {str(e)}"
     
     async def process_voice_input(self, audio_input: Union[str, bytes], 
                                  language: str = "en", 
@@ -269,7 +382,7 @@ async def main():
                     "Hello! I am the Talking Orange! 🍊 I'm here to tell you all about Bitcoin!",
                     "default", "en", "auto"
                 )
-                print(f"✅ TTS synthesis successful: {len(audio_data)} bytes")
+                logger.info(f"✅ TTS synthesis successful: {len(audio_data)} bytes")
             except Exception as e:
                 print(f"⚠️ TTS synthesis test failed: {e}")
             

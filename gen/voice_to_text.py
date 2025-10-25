@@ -26,7 +26,7 @@ class VoiceToTextService:
     """
     
     def __init__(self, model_dir: str = None, model_name: str = "small"):
-        self.model_dir = model_dir or os.getenv('MODEL_DIR', '/opt/jarvis_editor/2.0/models')
+        self.model_dir = model_dir or os.getenv('MODEL_DIR', str(Path(__file__).parent.parent / 'models'))
         self.model_name = model_name or os.getenv('WHISPER_MODEL_NAME', 'small')
         self.model = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -130,8 +130,8 @@ class VoiceToTextService:
             Dict with transcription results
         """
         try:
-            # Create temporary file
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+            # Create temporary file with WebM extension (frontend sends WebM format)
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_file:
                 temp_file.write(audio_buffer)
                 temp_path = temp_file.name
             

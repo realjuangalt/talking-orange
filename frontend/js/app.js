@@ -1,383 +1,469 @@
-// Talking Orange AR Project - Main Application
+/**
+ * Talking Orange - Bitcoin AR Experience
+ * Main application logic for camera and microphone permissions
+ */
+
 class TalkingOrangeApp {
     constructor() {
-        this.isInitialized = false;
-        this.sessionId = this.generateSessionId();
-        this.apiBaseUrl = window.location.origin + '/api';
+        this.camera = null;
+        this.microphone = null;
+        this.isActive = false;
+        this.isRecording = false;
+        this.mediaRecorder = null;
+        this.audioChunks = [];
+        this.arManager = null;
         
-        this.init();
+        this.initializeElements();
+        this.attachEventListeners();
     }
-
-    async init() {
+    
+    initializeElements() {
+        // Screens
+        this.welcomeScreen = document.getElementById('welcome-screen');
+        this.cameraScreen = document.getElementById('camera-screen');
+        this.errorScreen = document.getElementById('error-screen');
+        
+        // Buttons
+        this.startButton = document.getElementById('start-button');
+        this.stopButton = document.getElementById('stop-button');
+        this.retryButton = document.getElementById('retry-button');
+        this.microphoneButton = document.getElementById('microphone-button');
+        
+        // Camera elements
+        this.cameraFeed = document.getElementById('camera-feed');
+        this.cameraStatus = document.getElementById('camera-status');
+        this.microphoneStatus = document.getElementById('microphone-status');
+        
+        // Error message
+        this.errorMessage = document.getElementById('error-message');
+    }
+    
+    attachEventListeners() {
+        this.startButton.addEventListener('click', () => this.startExperience());
+        this.stopButton.addEventListener('click', () => this.stopExperience());
+        this.retryButton.addEventListener('click', () => this.startExperience());
+        this.microphoneButton.addEventListener('click', () => this.toggleRecording());
+    }
+    
+    async startExperience() {
         try {
-            console.log('🍊 Initializing Talking Orange AR App...');
-            
-            // Show loading screen
-            this.showScreen('loading-screen');
-            
-            // Wait for DOM to be ready
-            await this.waitForDOM();
-            
-            // Initialize components
-            await this.initializeComponents();
-            
-            // Check for permissions
-            await this.checkPermissions();
-            
-            this.isInitialized = true;
-            console.log('✅ Talking Orange AR App initialized successfully');
-            
-        } catch (error) {
-            console.error('❌ Failed to initialize app:', error);
-            this.showError('Failed to initialize the application');
-        }
-    }
-
-    async waitForDOM() {
-        return new Promise((resolve) => {
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', resolve);
-            } else {
-                resolve();
-            }
-        });
-    }
-
-    async initializeComponents() {
-        // Initialize AR Manager
-        this.arManager = new ARManager();
-        
-        // Initialize Voice Manager
-        this.voiceManager = new VoiceManager();
-        
-        // Initialize QR Manager
-        this.qrManager = new QRManager();
-        
-        // Set up event listeners
-        this.setupEventListeners();
-    }
-
-    setupEventListeners() {
-        // Permission buttons
-        document.getElementById('grant-permissions').addEventListener('click', () => {
-            this.requestPermissions();
-        });
-        
-        document.getElementById('deny-permissions').addEventListener('click', () => {
-            this.showError('Camera and microphone access is required for the AR experience');
-        });
-        
-        // Retry button
-        document.getElementById('retry-btn').addEventListener('click', () => {
-            this.init();
-        });
-        
-        // Voice button
-        document.getElementById('start-listening').addEventListener('click', () => {
-            this.startVoiceInteraction();
-        });
-    }
-
-    async checkPermissions() {
-        try {
-            // Check if we're in a secure context (HTTPS or localhost)
-            if (!this.isSecureContext()) {
-                throw new Error('AR experience requires HTTPS or localhost');
-            }
-            
-            // Check for required APIs
-            if (!('mediaDevices' in navigator)) {
-                throw new Error('Camera access not supported');
-            }
-            
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                throw new Error('Speech recognition not supported');
-            }
-            
-            // Hide loading screen and show permission screen
-            this.hideScreen('loading-screen');
-            this.showScreen('permission-screen');
-            
-        } catch (error) {
-            console.error('Permission check failed:', error);
-            this.showError(error.message);
-        }
-    }
-
-    async requestPermissions() {
-        try {
-            console.log('🎤 Requesting camera and microphone permissions...');
-            
-            // Request camera access
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'user' },
-                audio: true
-            });
-            
-            console.log('✅ Permissions granted');
-            
-            // Stop the stream (we'll start it again in AR)
-            stream.getTracks().forEach(track => track.stop());
-            
-            // Hide permission screen and show AR experience
-            this.hideScreen('permission-screen');
-            this.showScreen('ar-experience');
-            
-            // Initialize AR experience
-            await this.initializeARExperience();
-            
-        } catch (error) {
-            console.error('❌ Permission request failed:', error);
-            this.showError('Permission denied. Please allow camera and microphone access to continue.');
-        }
-    }
-
-    async initializeARExperience() {
-        try {
-            console.log('🚀 Initializing AR experience...');
-            
-            // Initialize AR manager
-            await this.arManager.initialize();
-            
-            // Initialize voice manager
-            await this.voiceManager.initialize();
-            
-            // Set up AR event listeners
-            this.arManager.onMarkerDetected(() => {
-                console.log('🎯 AR marker detected');
-                this.onMarkerDetected();
-            });
-            
-            this.arManager.onMarkerLost(() => {
-                console.log('❌ AR marker lost');
-                this.onMarkerLost();
-            });
-            
-            // Set up voice event listeners
-            this.voiceManager.onSpeechResult((text) => {
-                console.log('🎤 Speech recognized:', text);
-                this.processSpeechInput(text);
-            });
-            
-            this.voiceManager.onListeningStart(() => {
-                this.showListeningIndicator();
-            });
-            
-            this.voiceManager.onListeningEnd(() => {
-                this.hideListeningIndicator();
-            });
-            
-            console.log('✅ AR experience initialized');
-            
-        } catch (error) {
-            console.error('❌ AR initialization failed:', error);
-            this.showError('Failed to initialize AR experience');
-        }
-    }
-
-    async onMarkerDetected() {
-        // Show welcome message
-        this.showOrangeResponse('Hello! I\'m the Talking Orange! 🍊 Ask me anything about Bitcoin!');
-        
-        // Enable voice interaction
-        this.enableVoiceInteraction();
-    }
-
-    async onMarkerLost() {
-        // Hide response area
-        this.hideOrangeResponse();
-        
-        // Disable voice interaction
-        this.disableVoiceInteraction();
-    }
-
-    async startVoiceInteraction() {
-        try {
-            await this.voiceManager.startListening();
-        } catch (error) {
-            console.error('Voice interaction failed:', error);
-            this.showOrangeResponse('Sorry, I couldn\'t hear you. Please try again.');
-        }
-    }
-
-    async processSpeechInput(text) {
-        try {
-            console.log('🤖 Processing speech input:', text);
+            console.log('🍊 Starting Talking Orange experience...');
             
             // Show loading state
-            this.showOrangeResponse('Let me think about that...');
+            this.startButton.disabled = true;
+            this.startButton.innerHTML = '<span class="btn-text">Starting...</span><span class="btn-icon">⏳</span>';
             
-            // Send to backend for processing
-            const response = await this.sendSpeechToBackend(text);
-            
-            // Show response
-            this.showOrangeResponse(response.response);
-            
-            // Play audio response if available
-            if (response.audioUrl) {
-                await this.playAudioResponse(response.audioUrl);
-            } else {
-                // Fallback to browser TTS
-                this.speakText(response.response);
-            }
-            
-            // Log analytics
-            this.logAnalytics('speech_processed', {
-                input: text,
-                response: response.response,
-                audioUrl: response.audioUrl,
-                timestamp: new Date().toISOString()
+            // Request camera and microphone permissions
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: 'user'
+                },
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
             });
             
+            console.log('✅ Camera and microphone access granted');
+            
+            // Set up camera feed
+            this.cameraFeed.srcObject = stream;
+            this.camera = stream.getVideoTracks()[0];
+            this.microphone = stream.getAudioTracks()[0];
+            
+            // Update status indicators
+            this.updateStatusIndicators();
+            
+            // Switch to camera screen
+            this.showScreen('camera');
+            this.isActive = true;
+            
+            // Initialize AR Manager
+            this.initializeAR();
+            
+            // Set up track event listeners
+            this.setupTrackListeners();
+            
+            console.log('🎉 Talking Orange experience started successfully!');
+            
         } catch (error) {
-            console.error('Speech processing failed:', error);
-            this.showOrangeResponse('Sorry, I had trouble understanding that. Can you try asking about Bitcoin?');
+            console.error('❌ Failed to start experience:', error);
+            this.handlePermissionError(error);
         }
     }
-
-    async sendSpeechToBackend(text) {
-        const response = await fetch(`${this.apiBaseUrl}/speech/process`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                text: text,
-                sessionId: this.sessionId
-            })
+    
+    setupTrackListeners() {
+        if (this.camera) {
+            this.camera.addEventListener('ended', () => {
+                console.log('📹 Camera track ended');
+                this.updateCameraStatus(false);
+            });
+        }
+        
+        if (this.microphone) {
+            this.microphone.addEventListener('ended', () => {
+                console.log('🎤 Microphone track ended');
+                this.updateMicrophoneStatus(false);
+            });
+        }
+    }
+    
+    updateStatusIndicators() {
+        this.updateCameraStatus(this.camera && this.camera.readyState === 'live');
+        this.updateMicrophoneStatus(this.microphone && this.microphone.readyState === 'live');
+    }
+    
+    updateCameraStatus(isActive) {
+        if (isActive) {
+            this.cameraStatus.classList.add('active');
+        } else {
+            this.cameraStatus.classList.remove('active');
+        }
+    }
+    
+    updateMicrophoneStatus(isActive) {
+        if (isActive) {
+            this.microphoneStatus.classList.add('active');
+        } else {
+            this.microphoneStatus.classList.remove('active');
+        }
+    }
+    
+    handlePermissionError(error) {
+        console.error('Permission error:', error);
+        
+        let errorMsg = 'We need camera and microphone access to provide the AR experience.';
+        
+        if (error.name === 'NotAllowedError') {
+            errorMsg = 'Permission denied. Please allow camera and microphone access and try again.';
+        } else if (error.name === 'NotFoundError') {
+            errorMsg = 'Camera or microphone not found. Please check your device.';
+        } else if (error.name === 'NotSupportedError') {
+            errorMsg = 'Your browser does not support camera or microphone access.';
+        } else if (error.name === 'NotReadableError') {
+            errorMsg = 'Camera or microphone is being used by another application.';
+        }
+        
+        this.errorMessage.textContent = errorMsg;
+        this.showScreen('error');
+        
+        // Reset start button
+        this.startButton.disabled = false;
+        this.startButton.innerHTML = '<span class="btn-text">Let\'s Do It!</span><span class="btn-icon">🚀</span>';
+    }
+    
+    initializeAR() {
+        try {
+            console.log('🍊 Initializing AR Manager...');
+            this.arManager = new ARManager();
+            this.arManager.startAR();
+            console.log('✅ AR Manager initialized');
+        } catch (error) {
+            console.error('❌ Failed to initialize AR:', error);
+        }
+    }
+    
+    stopExperience() {
+        console.log('🛑 Stopping Talking Orange experience...');
+        
+        // Stop recording if active
+        if (this.isRecording) {
+            this.stopRecording();
+        }
+        
+        // Stop AR
+        if (this.arManager) {
+            this.arManager.stopAR();
+            this.arManager.destroy();
+            this.arManager = null;
+        }
+        
+        // Stop all tracks
+        if (this.camera) {
+            this.camera.stop();
+            this.camera = null;
+        }
+        
+        if (this.microphone) {
+            this.microphone.stop();
+            this.microphone = null;
+        }
+        
+        // Clear camera feed
+        if (this.cameraFeed.srcObject) {
+            this.cameraFeed.srcObject = null;
+        }
+        
+        // Reset status
+        this.isActive = false;
+        this.isRecording = false;
+        this.updateCameraStatus(false);
+        this.updateMicrophoneStatus(false);
+        this.updateMicrophoneButton();
+        
+        // Return to welcome screen
+        this.showScreen('welcome');
+        
+        console.log('✅ Experience stopped');
+    }
+    
+    showScreen(screenName) {
+        // Hide all screens
+        document.querySelectorAll('.screen').forEach(screen => {
+            screen.classList.remove('active');
         });
         
-        if (!response.ok) {
-            throw new Error('Backend request failed');
+        // Show target screen
+        const targetScreen = document.getElementById(`${screenName}-screen`);
+        if (targetScreen) {
+            targetScreen.classList.add('active');
+        }
+    }
+    
+    // Check if browser supports required features
+    checkBrowserSupport() {
+        const hasGetUserMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+        const hasWebRTC = !!(window.RTCPeerConnection || window.webkitRTCPeerConnection);
+        
+        if (!hasGetUserMedia || !hasWebRTC) {
+            console.warn('⚠️ Browser may not support required features');
+            return false;
         }
         
-        return await response.json();
+        return true;
     }
-
-    showOrangeResponse(text) {
-        const responseElement = document.getElementById('orange-response');
-        const textElement = responseElement.querySelector('.response-text');
-        
-        textElement.textContent = text;
-        responseElement.classList.remove('hidden');
-        
-        // Auto-hide after 5 seconds
-        setTimeout(() => {
-            this.hideOrangeResponse();
-        }, 5000);
+    
+    // Recording functionality
+    async toggleRecording() {
+        if (this.isRecording) {
+            this.stopRecording();
+        } else {
+            await this.startRecording();
+        }
     }
-
-    hideOrangeResponse() {
-        document.getElementById('orange-response').classList.add('hidden');
-    }
-
-    showListeningIndicator() {
-        document.getElementById('listening-indicator').classList.remove('hidden');
-        document.getElementById('start-listening').classList.add('voice-active');
-    }
-
-    hideListeningIndicator() {
-        document.getElementById('listening-indicator').classList.add('hidden');
-        document.getElementById('start-listening').classList.remove('voice-active');
-    }
-
-    enableVoiceInteraction() {
-        document.getElementById('start-listening').disabled = false;
-        document.getElementById('start-listening').textContent = '🎤 Ask about Bitcoin';
-    }
-
-    disableVoiceInteraction() {
-        document.getElementById('start-listening').disabled = true;
-        document.getElementById('start-listening').textContent = '🎤 Point at marker to talk';
-    }
-
-    async logAnalytics(eventType, data) {
+    
+    async startRecording() {
         try {
-            await fetch(`${this.apiBaseUrl}/analytics`, {
+            console.log('🎤 Starting audio recording...');
+            
+            if (!this.microphone || this.microphone.readyState !== 'live') {
+                throw new Error('Microphone not available');
+            }
+            
+            // Create MediaRecorder for audio only
+            const audioStream = new MediaStream([this.microphone]);
+            this.mediaRecorder = new MediaRecorder(audioStream, {
+                mimeType: 'audio/webm;codecs=opus'
+            });
+            
+            this.audioChunks = [];
+            
+            this.mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    this.audioChunks.push(event.data);
+                }
+            };
+            
+            this.mediaRecorder.onstop = () => {
+                this.processRecording();
+            };
+            
+            this.mediaRecorder.start();
+            this.isRecording = true;
+            this.updateMicrophoneButton();
+            
+            console.log('✅ Recording started');
+            
+        } catch (error) {
+            console.error('❌ Failed to start recording:', error);
+            this.showRecordingError('Failed to start recording. Please check microphone permissions.');
+        }
+    }
+    
+    stopRecording() {
+        if (this.mediaRecorder && this.isRecording) {
+            console.log('🛑 Stopping audio recording...');
+            this.mediaRecorder.stop();
+            this.isRecording = false;
+            this.updateMicrophoneButton();
+            console.log('✅ Recording stopped');
+        }
+    }
+    
+    async processRecording() {
+        try {
+            console.log('🔄 Processing recorded audio...');
+            
+            // Create audio blob
+            const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+            
+            if (audioBlob.size === 0) {
+                console.warn('⚠️ No audio recorded');
+                this.showRecordingError('No audio was recorded. Please try again.');
+                return;
+            }
+            
+            console.log(`📊 Audio blob size: ${audioBlob.size} bytes`);
+            
+            // Convert to base64 for server transmission
+            const base64Audio = await this.blobToBase64(audioBlob);
+            
+            // Send to server
+            await this.sendAudioToServer(base64Audio);
+            
+        } catch (error) {
+            console.error('❌ Error processing recording:', error);
+            this.showRecordingError('Error processing audio. Please try again.');
+        }
+    }
+    
+    async sendAudioToServer(audioData) {
+        try {
+            console.log('📤 Sending audio to server...');
+            
+            const response = await fetch('/api/speech/process', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    sessionId: this.sessionId,
-                    eventType: eventType,
-                    data: data
+                    audioData: audioData,
+                    sessionId: this.getSessionId(),
+                    language: 'en'
                 })
             });
-        } catch (error) {
-            console.error('Analytics logging failed:', error);
-        }
-    }
-
-    showScreen(screenId) {
-        document.getElementById(screenId).classList.remove('hidden');
-    }
-
-    hideScreen(screenId) {
-        document.getElementById(screenId).classList.add('hidden');
-    }
-
-    showError(message) {
-        document.getElementById('error-message').textContent = message;
-        this.hideScreen('loading-screen');
-        this.hideScreen('permission-screen');
-        this.hideScreen('ar-experience');
-        this.showScreen('error-screen');
-    }
-
-    isSecureContext() {
-        return window.isSecureContext || window.location.hostname === 'localhost';
-    }
-
-    generateSessionId() {
-        return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    }
-
-    // Audio response methods
-    async playAudioResponse(audioUrl) {
-        try {
-            const audio = new Audio(audioUrl);
-            audio.preload = 'auto';
             
-            return new Promise((resolve, reject) => {
-                audio.onended = () => resolve();
-                audio.onerror = (error) => reject(error);
-                audio.play().catch(reject);
-            });
-        } catch (error) {
-            console.error('Audio playback failed:', error);
-            // Fallback to browser TTS
-            this.speakText('Sorry, I had trouble playing the audio response.');
-        }
-    }
-
-    speakText(text) {
-        if ('speechSynthesis' in window) {
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 0.9;
-            utterance.pitch = 1.1;
-            utterance.volume = 1.0;
-            
-            // Try to find a good voice
-            const voices = speechSynthesis.getVoices();
-            const preferredVoice = voices.find(voice => 
-                voice.name.includes('Google') || 
-                voice.name.includes('Microsoft') ||
-                voice.lang.startsWith('en')
-            );
-            
-            if (preferredVoice) {
-                utterance.voice = preferredVoice;
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
             }
             
-            speechSynthesis.speak(utterance);
-        } else {
-            console.warn('Speech synthesis not supported');
+            const result = await response.json();
+            console.log('✅ Server response received:', result);
+            
+            // Play the response audio
+            if (result.audioUrl) {
+                await this.playResponseAudio(result.audioUrl);
+            }
+            
+            // Show response text (for debugging)
+            this.showResponseText(result.response);
+            
+        } catch (error) {
+            console.error('❌ Error sending audio to server:', error);
+            this.showRecordingError('Failed to send audio to server. Please try again.');
         }
+    }
+    
+    async playResponseAudio(audioUrl) {
+        try {
+            console.log('🔊 Playing response audio...');
+            const audio = new Audio(audioUrl);
+            audio.play();
+        } catch (error) {
+            console.error('❌ Error playing audio:', error);
+        }
+    }
+    
+    showResponseText(text) {
+        // Create a temporary overlay to show the response
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            z-index: 1000;
+            max-width: 80%;
+            text-align: center;
+            font-size: 1.1rem;
+        `;
+        overlay.textContent = text;
+        document.body.appendChild(overlay);
+        
+        // Remove after 5 seconds
+        setTimeout(() => {
+            if (overlay.parentNode) {
+                overlay.parentNode.removeChild(overlay);
+            }
+        }, 5000);
+    }
+    
+    showRecordingError(message) {
+        console.error('🎤 Recording error:', message);
+        // You could show a toast notification here
+        alert(message);
+    }
+    
+    updateMicrophoneButton() {
+        if (this.isRecording) {
+            this.microphoneButton.classList.add('recording');
+            this.microphoneButton.querySelector('.mic-text').textContent = 'Recording...';
+        } else {
+            this.microphoneButton.classList.remove('recording');
+            this.microphoneButton.querySelector('.mic-text').textContent = 'Tap to Talk';
+        }
+    }
+    
+    getSessionId() {
+        // Generate or retrieve session ID
+        let sessionId = sessionStorage.getItem('talkingOrangeSessionId');
+        if (!sessionId) {
+            sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            sessionStorage.setItem('talkingOrangeSessionId', sessionId);
+        }
+        return sessionId;
+    }
+    
+    blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const base64 = reader.result.split(',')[1];
+                resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+    
+    // Initialize the app
+    init() {
+        console.log('🍊 Talking Orange app initializing...');
+        
+        if (!this.checkBrowserSupport()) {
+            console.warn('⚠️ Browser support check failed, but continuing...');
+        }
+        
+        console.log('✅ Talking Orange app ready!');
     }
 }
 
-// Initialize the app when the page loads
+// Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    window.talkingOrangeApp = new TalkingOrangeApp();
+    const app = new TalkingOrangeApp();
+    app.init();
+    
+    // Make app globally available for debugging
+    window.talkingOrangeApp = app;
+});
+
+// Handle page visibility changes
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden && window.talkingOrangeApp && window.talkingOrangeApp.isActive) {
+        console.log('📱 Page hidden, but keeping camera active');
+    }
+});
+
+// Handle page unload
+window.addEventListener('beforeunload', () => {
+    if (window.talkingOrangeApp && window.talkingOrangeApp.isActive) {
+        window.talkingOrangeApp.stopExperience();
+    }
 });
