@@ -24,12 +24,6 @@ class ARManager {
         
         // Set up marker detection
         this.setupMarkerDetection();
-        
-        // Create 3D orange character
-        this.createOrangeCharacter();
-        
-        // Start animation loop
-        this.animate();
     }
     
     createARScene() {
@@ -73,27 +67,15 @@ class ARManager {
     }
     
     createOrangeForMarker(marker) {
-        // Create 3D orange character
-        const orangeGeometry = new THREE.SphereGeometry(0.5, 32, 32);
-        const orangeMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0xff8c00,
-            transparent: true,
-            opacity: 0.9
-        });
-        
-        const orangeMesh = new THREE.Mesh(orangeGeometry, orangeMaterial);
-        orangeMesh.position.set(0, 0.5, 0);
-        orangeMesh.scale.set(1, 1, 1);
-        
-        // Add face features
-        this.addFaceFeatures(orangeMesh);
-        
-        // Add to marker
+        // Create 3D orange character using A-Frame entities
         const orangeEntity = document.createElement('a-entity');
         orangeEntity.setAttribute('geometry', 'primitive: sphere; radius: 0.5');
         orangeEntity.setAttribute('material', 'color: #ff8c00; transparent: true; opacity: 0.9');
         orangeEntity.setAttribute('position', '0 0.5 0');
-        orangeEntity.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 10000');
+        orangeEntity.setAttribute('animation__rotate', 'property: rotation; to: 0 360 0; loop: true; dur: 10000');
+        
+        // Add face features as child entities
+        this.addFaceFeatures(orangeEntity);
         
         marker.appendChild(orangeEntity);
         
@@ -113,27 +95,28 @@ class ARManager {
         this.orangeCharacter = orangeEntity;
     }
     
-    addFaceFeatures(orangeMesh) {
-        // Add eyes
-        const eyeGeometry = new THREE.SphereGeometry(0.05, 16, 16);
-        const eyeMaterial = new THREE.MeshLambertMaterial({ color: 0x000000 });
+    addFaceFeatures(orangeEntity) {
+        // Add left eye
+        const leftEye = document.createElement('a-entity');
+        leftEye.setAttribute('geometry', 'primitive: sphere; radius: 0.05');
+        leftEye.setAttribute('material', 'color: black');
+        leftEye.setAttribute('position', '-0.15 0.1 0.4');
+        orangeEntity.appendChild(leftEye);
         
-        const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        leftEye.position.set(-0.15, 0.1, 0.4);
-        orangeMesh.add(leftEye);
-        
-        const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        rightEye.position.set(0.15, 0.1, 0.4);
-        orangeMesh.add(rightEye);
+        // Add right eye
+        const rightEye = document.createElement('a-entity');
+        rightEye.setAttribute('geometry', 'primitive: sphere; radius: 0.05');
+        rightEye.setAttribute('material', 'color: black');
+        rightEye.setAttribute('position', '0.15 0.1 0.4');
+        orangeEntity.appendChild(rightEye);
         
         // Add mouth
-        const mouthGeometry = new THREE.SphereGeometry(0.08, 16, 16);
-        const mouthMaterial = new THREE.MeshLambertMaterial({ color: 0x000000 });
-        
-        const mouth = new THREE.Mesh(mouthGeometry, mouthMaterial);
-        mouth.position.set(0, -0.1, 0.4);
-        mouth.scale.set(1, 0.5, 1);
-        orangeMesh.add(mouth);
+        const mouth = document.createElement('a-entity');
+        mouth.setAttribute('geometry', 'primitive: sphere; radius: 0.08');
+        mouth.setAttribute('material', 'color: black');
+        mouth.setAttribute('position', '0 -0.1 0.4');
+        mouth.setAttribute('scale', '1 0.5 1');
+        orangeEntity.appendChild(mouth);
     }
     
     setupMarkerDetection() {
@@ -154,11 +137,6 @@ class ARManager {
             console.error('❌ Marker image not found. Please ensure talking-orange-transparent.png is in the root directory');
         };
         markerImg.src = 'talking-orange-transparent.png';
-    }
-    
-    createOrangeCharacter() {
-        // This is handled by createOrangeForMarker now
-        console.log('🍊 Orange character will be created when marker is detected');
     }
     
     onMarkerDetected() {
@@ -214,11 +192,6 @@ class ARManager {
         }, 5000);
     }
     
-    animate() {
-        if (this.isARActive) {
-            requestAnimationFrame(() => this.animate());
-        }
-    }
     
     startAR() {
         console.log('🍊 Starting AR experience...');
