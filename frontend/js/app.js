@@ -348,8 +348,7 @@ class TalkingOrangeApp {
                 await this.playResponseAudio(result.audioUrl);
             }
             
-            // Show response text (for debugging)
-            this.showResponseText(result.response);
+            // Response will be played as audio only
             
         } catch (error) {
             console.error('❌ Error sending audio to server:', error);
@@ -367,33 +366,6 @@ class TalkingOrangeApp {
         }
     }
     
-    showResponseText(text) {
-        // Create a temporary overlay to show the response
-        const overlay = document.createElement('div');
-        overlay.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 1rem 2rem;
-            border-radius: 10px;
-            z-index: 1000;
-            max-width: 80%;
-            text-align: center;
-            font-size: 1.1rem;
-        `;
-        overlay.textContent = text;
-        document.body.appendChild(overlay);
-        
-        // Remove after 5 seconds
-        setTimeout(() => {
-            if (overlay.parentNode) {
-                overlay.parentNode.removeChild(overlay);
-            }
-        }, 5000);
-    }
     
     showRecordingError(message) {
         console.error('🎤 Recording error:', message);
