@@ -100,6 +100,7 @@ out/
 
 # Audio files (generated at runtime)
 public/audio/
+backend/data/
 *.wav
 *.mp3
 *.webm

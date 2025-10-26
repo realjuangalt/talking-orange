@@ -62,7 +62,9 @@ def create_directories():
         'public/audio',
         'frontend',
         'gen/prompts',
-        'gen/voices'
+        'gen/voices',
+        'backend/data/user',
+        'backend/data/ai'
     ]
     
     for directory in directories:
