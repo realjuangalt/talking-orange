@@ -1,5 +1,0 @@
-Please list the main ideas from the following transcript and rewrite them in Markdown format. Ensure that the ideas are clearly organized and formatted with appropriate Markdown syntax.
-
-Keep in mind some key words that you'll hear and might miss spell:
-
-Transcript:

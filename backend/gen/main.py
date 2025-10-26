@@ -39,7 +39,7 @@ class TalkingOrangeVoiceSystem:
     """
     
     def __init__(self, model_dir: str = None, voice_dir: str = None):
-        self.model_dir = model_dir or os.getenv('MODEL_DIR', str(Path(__file__).parent.parent / 'models'))
+        self.model_dir = model_dir or os.getenv('MODEL_DIR', str(Path(__file__).parent.parent.parent / 'models'))
         self.voice_dir = voice_dir or os.getenv('VOICE_DIR', './voices')
         
         # Initialize services
@@ -146,12 +146,21 @@ class TalkingOrangeVoiceSystem:
             except ImportError:
                 from text_generator import TextGenerator
             
-            # Create Bitcoin evangelism prompt
-            bitcoin_prompt = f"""You are a friendly, enthusiastic Bitcoin evangelist. The user said: "{user_input}"
+            # Load Bitcoin evangelism prompt from file
+            prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', 'bitcoin_evangelism.txt')
+            
+            if os.path.exists(prompt_path):
+                with open(prompt_path, 'r', encoding='utf-8') as f:
+                    system_prompt = f.read().strip()
+            else:
+                logger.error(f"Prompt file not found at {prompt_path}")
+                system_prompt = "You are a friendly Bitcoin educator."
+            
+            # Create full prompt
+            bitcoin_prompt = f"{system_prompt}\n\nThe user said: {user_input}"
 
-Respond in a conversational, helpful way about Bitcoin. Be informative but not pushy. Keep responses under 100 words and make them engaging and educational.
-
-Focus on Bitcoin's key benefits: decentralization, security, scarcity, and financial sovereignty. Use simple language that anyone can understand."""
+            # Log conversation to file
+            self._log_conversation(user_input, bitcoin_prompt)
 
             # Generate response using Venice AI
             text_generator = TextGenerator()
@@ -165,15 +174,24 @@ Focus on Bitcoin's key benefits: decentralization, security, scarcity, and finan
                     text_generator.generate_text(bitcoin_prompt)
                 )
                 if response and response.strip():
-                    return response.strip()
+                    response_text = response.strip()
+                    # Log AI response
+                    self._log_ai_response(response_text)
+                    return response_text
                 else:
-                    raise Exception("No response from LLM")
+                    fallback_response = "I'm having trouble generating a response right now. Please try again!"
+                    # Log the fallback response
+                    self._log_ai_response(fallback_response)
+                    return fallback_response
             finally:
                 loop.close()
             
         except Exception as e:
             logger.error(f"LLM response generation failed: {e}")
-            return f"Sorry, I'm having trouble connecting to my AI brain right now. Error: {str(e)}"
+            fallback_response = f"Sorry, I'm having trouble connecting to my AI brain right now. Error: {str(e)}"
+            # Log the fallback response
+            self._log_ai_response(fallback_response)
+            return fallback_response
     
     async def process_voice_input(self, audio_input: Union[str, bytes], 
                                  language: str = "en", 
@@ -287,23 +305,68 @@ PERSONALITY:
 
 You have access to web search capabilities, so you can provide up-to-date information about Bitcoin when needed."""
             
+            # Create full prompt for logging
+            full_prompt = f"System: {system_prompt}\n\nUser: {user_input}"
+            
+            # Log conversation to file
+            self._log_conversation(user_input, full_prompt)
+            
             # Use the text generator for real LLM response
             response = await self.text_generator.generate_text(
-                prompt=f"System: {system_prompt}\n\nUser: {user_input}",
+                prompt=full_prompt,
                 model="llama-3.3-70b",
                 max_tokens=150,
                 temperature=0.7
             )
             
             if response:
-                return response.strip()
+                response_text = response.strip()
+                # Log AI response
+                self._log_ai_response(response_text)
+                return response_text
             else:
+                error_response = "I'm having trouble thinking right now. Could you ask me again?"
+                self._log_ai_response(error_response)
                 raise Exception("No response from LLM")
                 
         except Exception as e:
             logger.error(f"Bitcoin response generation failed: {e}")
             # Fallback to simple Bitcoin response
             return f"Bitcoin is amazing! It's digital money that gives you financial freedom! 🍊 What would you like to know about Bitcoin?"
+    
+    def _log_conversation(self, user_input: str, full_prompt: str):
+        """Log conversation details to talk.log file."""
+        try:
+            from datetime import datetime
+            log_path = os.path.join(os.path.dirname(__file__), '..', '..', 'talk.log')
+            
+            with open(log_path, 'a', encoding='utf-8') as f:
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                f.write(f"\n{'='*80}\n")
+                f.write(f"CONVERSATION LOG - {timestamp}\n")
+                f.write(f"{'='*80}\n")
+                f.write(f"USER TRANSCRIPTION: {user_input}\n")
+                f.write(f"{'='*80}\n")
+                f.write(f"PROMPT SENT TO AI:\n{full_prompt}\n")
+                f.write(f"{'='*80}\n")
+                f.flush()
+                
+        except Exception as e:
+            logger.error(f"Failed to log conversation: {e}")
+    
+    def _log_ai_response(self, ai_response: str):
+        """Log AI response to talk.log file."""
+        try:
+            from datetime import datetime
+            log_path = os.path.join(os.path.dirname(__file__), '..', '..', 'talk.log')
+            
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(f"AI RESPONSE: {ai_response}\n")
+                f.write(f"{'='*80}\n")
+                f.flush()
+                
+        except Exception as e:
+            logger.error(f"Failed to log AI response: {e}")
     
     def get_status(self) -> Dict[str, Any]:
         """Get comprehensive status of voice processing services."""

@@ -113,9 +113,9 @@ talking-orange/
 ├── backend/
 │   ├── app.py             # Flask server with API endpoints
 │   └── venv/              # Python virtual environment
-├── talking-orange-transparent.png      # Base character image
-├── talking-orange-half-open-mouth.png  # Half-open mouth state
-├── talking-orange-open-mouth.png       # Wide-open mouth state
+├── talking-orange-smile.png            # Smile/closed mouth (idle state)
+├── talking-orange-half-open-mouth.png  # Half-open mouth (talking animation)
+├── talking-orange-open-mouth.png       # Wide-open mouth (talking animation)
 └── README.md
 ```
 

@@ -14,16 +14,15 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-# Add gen directory to path
-gen_dir = os.path.join(os.path.dirname(__file__), '..', 'gen')
+# Add backend/gen directory to path
+gen_dir = os.path.join(os.path.dirname(__file__), 'gen')
 if gen_dir not in sys.path:
     sys.path.insert(0, gen_dir)
 
 # Import our voice processing modules
 import importlib.util
-import sys
 
-# Load the main module from gen directory
+# Load the main module from backend/gen directory
 spec = importlib.util.spec_from_file_location("main", os.path.join(gen_dir, "main.py"))
 main_module = importlib.util.module_from_spec(spec)
 sys.modules["main"] = main_module
@@ -114,10 +113,10 @@ def targets_mind():
         logger.error(f"❌ Error serving targets.mind: {e}")
         return f"Error: {e}", 500
 
-@app.route('/talking-orange-transparent.png')
-def talking_orange_transparent():
-    """Serve the talking orange transparent PNG"""
-    return send_from_directory('..', 'talking-orange-transparent.png')
+@app.route('/talking-orange-smile.png')
+def talking_orange_smile():
+    """Serve the talking orange smile PNG"""
+    return send_from_directory('..', 'talking-orange-smile.png')
 
 @app.route('/talking-orange-mouth-half.png')
 def talking_orange_mouth_half():
