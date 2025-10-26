@@ -98,6 +98,37 @@ def print_page():
     """Serve the print demo page."""
     return send_from_directory('../frontend', 'print.html')
 
+@app.route('/test')
+def test_route():
+    """Test route to verify Flask is working"""
+    logger.info("🧪 Test route called!")
+    return "Test route working!"
+
+@app.route('/targets.mind')
+def targets_mind():
+    """Serve the compiled MindAR targets file"""
+    logger.info("🎯 targets.mind route called!")
+    try:
+        return send_from_directory('..', 'targets.mind')
+    except Exception as e:
+        logger.error(f"❌ Error serving targets.mind: {e}")
+        return f"Error: {e}", 500
+
+@app.route('/talking-orange-transparent.png')
+def talking_orange_transparent():
+    """Serve the talking orange transparent PNG"""
+    return send_from_directory('..', 'talking-orange-transparent.png')
+
+@app.route('/talking-orange-mouth-half.png')
+def talking_orange_mouth_half():
+    """Serve the talking orange mouth half open PNG"""
+    return send_from_directory('..', 'talking-orange-half-open-mouth.png')
+
+@app.route('/talking-orange-mouth-open.png')
+def talking_orange_mouth_open():
+    """Serve the talking orange mouth wide open PNG"""
+    return send_from_directory('..', 'talking-orange-open-mouth.png')
+
 @app.route('/<path:filename>')
 def serve_static(filename):
     """Serve static files from frontend directory."""
@@ -360,6 +391,26 @@ def get_available_voices():
 def serve_audio(filename):
     """Serve audio files."""
     return send_from_directory('../public/audio', filename)
+
+@app.route('/ar-test.html')
+def ar_test():
+    """Serve the basic AR test page"""
+    return send_from_directory('../frontend', 'ar-test.html')
+
+@app.route('/mindar-simple.html')
+def mindar_simple():
+    """Serve the simple MindAR test page"""
+    return send_from_directory('../frontend', 'mindar-simple.html')
+
+@app.route('/mindar-local.html')
+def mindar_local():
+    """Serve the local MindAR test page"""
+    return send_from_directory('../frontend', 'mindar-local.html')
+
+@app.route('/mindar-orange.html')
+def mindar_orange():
+    """Serve the MindAR orange test page"""
+    return send_from_directory('../frontend', 'mindar-orange.html')
 
 @app.errorhandler(404)
 def not_found(error):

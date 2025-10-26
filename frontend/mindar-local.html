@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MindAR Local Test</title>
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+</head>
+<body>
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: yes; uiScanning: yes; uiError: yes;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="antialias: true; physicallyCorrectLights: true">
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        <a-assets>
+            <img id="talking-orange" src="/talking-orange-transparent.png" />
+            <img id="talking-orange-mouth-open" src="/talking-orange-mouth-open.png" />
+            <img id="talking-orange-mouth-half" src="/talking-orange-mouth-half.png" />
+        </a-assets>
+        
+        <a-entity mindar-image-target="targetIndex: 0">
+            <!-- Project the talking orange image as a plane overlay with smoothing -->
+            <a-plane id="talking-orange-plane" src="#talking-orange" position="0 0 0.01" height="1" width="1" rotation="9 0 0" 
+                     material="transparent: true; alphaTest: 0.1; opacity: 1"
+                     animation="property: position; to: 0 0 0.01; dur: 300; easing: easeInOutQuad; loop: true; dir: alternate"></a-plane>
+            
+            <!-- Additional 3D objects with smoothing (cube removed) -->
+           
+            <a-text value="TALKING ORANGE" position="0 1.5 0" color="orange" align="center" 
+                    animation="property: position; to: 0 1.5 0; dur: 300; easing: easeInOutQuad; loop: true; dir: alternate"></a-text>
+        </a-entity>
+    </a-scene>
+    
+    <!-- Test controls for talking animation -->
+    <div style="position: fixed; top: 10px; left: 10px; z-index: 1000; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px;">
+        <button onclick="window.startTalkingAnimation()" style="background: #4CAF50; color: white; border: none; padding: 8px 16px; margin: 5px; border-radius: 3px; cursor: pointer;">Start Talking</button>
+        <button onclick="window.stopTalkingAnimation()" style="background: #f44336; color: white; border: none; padding: 8px 16px; margin: 5px; border-radius: 3px; cursor: pointer;">Stop Talking</button>
+    </div>
+    
+    <script>
+        console.log('🔍 MindAR Local Test - Using YOUR targets.mind file');
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const scene = document.querySelector('a-scene');
+            const marker = document.querySelector('[mindar-image-target]');
+            const orangePlane = document.querySelector('#talking-orange-plane');
+            
+            console.log('🔍 Scene:', scene);
+            console.log('🔍 Marker:', marker);
+            console.log('🔍 Orange Plane:', orangePlane);
+            
+            // Talking animation system
+            const mouthStates = ['#talking-orange', '#talking-orange-mouth-half', '#talking-orange-mouth-open'];
+            let currentMouthState = 0;
+            let isTalking = false;
+            let talkingInterval = null;
+            
+            function startTalkingAnimation() {
+                if (isTalking) return;
+                isTalking = true;
+                console.log('🗣️ Starting talking animation');
+                
+                talkingInterval = setInterval(() => {
+                    currentMouthState = (currentMouthState + 1) % mouthStates.length;
+                    orangePlane.setAttribute('src', mouthStates[currentMouthState]);
+                }, 200); // Change mouth every 200ms
+            }
+            
+            function stopTalkingAnimation() {
+                if (!isTalking) return;
+                isTalking = false;
+                console.log('🔇 Stopping talking animation');
+                
+                if (talkingInterval) {
+                    clearInterval(talkingInterval);
+                    talkingInterval = null;
+                }
+                
+                // Return to closed mouth
+                orangePlane.setAttribute('src', '#talking-orange');
+                currentMouthState = 0;
+            }
+            
+            // Expose functions globally for external control
+            window.startTalkingAnimation = startTalkingAnimation;
+            window.stopTalkingAnimation = stopTalkingAnimation;
+            
+            if (marker) {
+                // Add smoothing variables
+                let lastPosition = { x: 0, y: 0, z: 0 };
+                let smoothingFactor = 0.05; // Much more aggressive smoothing
+                let positionHistory = [];
+                const maxHistoryLength = 5;
+                
+                marker.addEventListener('targetFound', function() {
+                    console.log('🎯 Target found! Red cube and blue sphere should be visible');
+                });
+                marker.addEventListener('targetLost', function() {
+                    console.log('❌ Target lost');
+                });
+                
+                // Add smoothing to marker position
+                marker.addEventListener('componentchanged', function(event) {
+                    if (event.detail.name === 'position') {
+                        const currentPos = marker.getAttribute('position');
+                        if (currentPos) {
+                            // Add to position history
+                            positionHistory.push({
+                                x: parseFloat(currentPos.x),
+                                y: parseFloat(currentPos.y),
+                                z: parseFloat(currentPos.z)
+                            });
+                            
+                            // Keep only recent positions
+                            if (positionHistory.length > maxHistoryLength) {
+                                positionHistory.shift();
+                            }
+                            
+                            // Calculate average position
+                            const avgPos = {
+                                x: positionHistory.reduce((sum, pos) => sum + pos.x, 0) / positionHistory.length,
+                                y: positionHistory.reduce((sum, pos) => sum + pos.y, 0) / positionHistory.length,
+                                z: positionHistory.reduce((sum, pos) => sum + pos.z, 0) / positionHistory.length
+                            };
+                            
+                            // Apply additional smoothing
+                            const smoothedPos = {
+                                x: lastPosition.x + (avgPos.x - lastPosition.x) * smoothingFactor,
+                                y: lastPosition.y + (avgPos.y - lastPosition.y) * smoothingFactor,
+                                z: lastPosition.z + (avgPos.z - lastPosition.z) * smoothingFactor
+                            };
+                            
+                            lastPosition = smoothedPos;
+                            marker.setAttribute('position', `${smoothedPos.x} ${smoothedPos.y} ${smoothedPos.z}`);
+                        }
+                    }
+                });
+            }
+            
+            // Check for MindAR system
+            setTimeout(() => {
+                if (scene && scene.systems && scene.systems['mindar-image-system']) {
+                    console.log('✅ MindAR system found:', scene.systems['mindar-image-system']);
+                } else {
+                    console.log('❌ MindAR system not found');
+                    console.log('🔍 Available systems:', scene.systems ? Object.keys(scene.systems) : 'No systems');
+                }
+            }, 3000);
+        });
+    </script>
+</body>
+</html>

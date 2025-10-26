@@ -5,6 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Talking Orange - Bitcoin AR Experience</title>
     <link rel="stylesheet" href="css/style.css">
+    
+    <!-- A-Frame and MindAR loaded from CDN for better reliability -->
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <script>
+        // MindAR loading check
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                console.log('🔍 MindAR loading check...');
+                console.log('🔍 AFRAME available:', typeof AFRAME !== 'undefined');
+                console.log('🔍 AFRAME.systems:', Object.keys(AFRAME.systems || {}));
+                console.log('🔍 AFRAME.components:', Object.keys(AFRAME.components || {}));
+                
+                // Check specifically for MindAR components
+                const mindarComponents = Object.keys(AFRAME.components || {}).filter(name => name.includes('mindar'));
+                console.log('🔍 MindAR components found:', mindarComponents);
+                
+                if (AFRAME.systems['mindar-image-system']) {
+                    console.log('✅ MindAR system found!');
+                } else {
+                    console.log('❌ MindAR system not found');
+                    console.log('🔍 Available systems:', Object.keys(AFRAME.systems || {}));
+                }
+                
+                // Test basic A-Frame functionality
+                if (typeof AFRAME !== 'undefined') {
+                    console.log('✅ A-Frame is loaded');
+                    console.log('🔍 A-Frame version:', AFRAME.version);
+                } else {
+                    console.log('❌ A-Frame not loaded');
+                }
+            }, 2000);
+        });
+    </script>
 </head>
 <body>
     <div class="container">
@@ -18,18 +52,8 @@
                 </div>
                 
                 <div class="permission-explanation">
-                    <h2>Welcome to the Future of Bitcoin Education!</h2>
-                    <p>This AR experience brings Bitcoin to life through an interactive 3D orange character that can talk, listen, and answer your questions about Bitcoin.</p>
-                    
-                    <div class="ar-instructions">
-                        <h3>How to use:</h3>
-                        <ol>
-                            <li><a href="ar-marker.html" target="_blank" style="color: #ff8c00; text-decoration: underline;">Print the talking orange marker</a></li>
-                            <li>Point your camera at the printed image</li>
-                            <li>Watch the 3D orange character come to life!</li>
-                            <li>Use the microphone to talk to the character</li>
-                        </ol>
-                    </div>
+                    <h2>Welcome to Talking Orange!</h2>
+                    <p>Point your camera at the talking orange marker to see the 3D character come to life.</p>
                     
                     <div class="permissions-info">
                         <h3>We need your permission for:</h3>
@@ -37,24 +61,24 @@
                             <div class="permission-icon">📹</div>
                             <div class="permission-text">
                                 <strong>Camera Access</strong>
-                                <p>To display the 3D orange character in augmented reality</p>
+                                <p>To display the 3D orange character</p>
                             </div>
                         </div>
                         <div class="permission-item">
                             <div class="permission-icon">🎤</div>
                             <div class="permission-text">
                                 <strong>Microphone Access</strong>
-                                <p>To hear your questions and respond with voice</p>
+                                <p>To talk to the character</p>
                             </div>
                         </div>
                     </div>
                     
                     <div class="privacy-note">
-                        <p><strong>Privacy:</strong> Your voice is processed locally and not stored. We only use it to generate responses about Bitcoin.</p>
+                        <p><strong>Privacy:</strong> Your voice is processed locally and not stored.</p>
                     </div>
                     
                     <button id="start-button" class="start-btn">
-                        <span class="btn-text">Let's Do It!</span>
+                        <span class="btn-text">Start AR Experience</span>
                         <span class="btn-icon">🚀</span>
                     </button>
                 </div>
@@ -65,6 +89,7 @@
         <div id="camera-screen" class="screen">
             <div class="camera-container">
                 <video id="camera-feed" autoplay muted playsinline></video>
+                
                 <div class="camera-overlay">
                     <div class="status-indicator">
                         <div class="status-dot" id="camera-status"></div>
@@ -96,22 +121,700 @@
         </div>
     </div>
     
-    <!-- A-Frame for AR.js (must be first) -->
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    
-    <!-- AR.js for marker detection -->
-    <script src="https://cdn.jsdelivr.net/npm/ar.js@1.8.0/aframe.min.js"></script>
-    
-    <!-- QR Code library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js"></script>
-    
-    <!-- QR Manager -->
-    <script src="js/qr-manager.js"></script>
-    
-    <!-- AR Manager -->
-    <script src="js/ar-manager.js"></script>
-    
     <!-- Main App -->
-    <script src="js/app.js"></script>
+    <script>
+        /**
+         * Talking Orange - Bitcoin AR Experience
+         * Modular application with separate concerns
+         */
+
+        // ========================================
+        // MODULE 1: UI MANAGEMENT
+        // ========================================
+        class UIManager {
+            constructor() {
+                this.initializeElements();
+                this.attachEventListeners();
+            }
+            
+            initializeElements() {
+                // Screens
+                this.welcomeScreen = document.getElementById('welcome-screen');
+                this.cameraScreen = document.getElementById('camera-screen');
+                this.errorScreen = document.getElementById('error-screen');
+                
+                // Buttons
+                this.startButton = document.getElementById('start-button');
+                this.stopButton = document.getElementById('stop-button');
+                this.retryButton = document.getElementById('retry-button');
+                this.microphoneButton = document.getElementById('microphone-button');
+                
+                // Camera elements
+                this.cameraFeed = document.getElementById('camera-feed');
+                this.cameraStatus = document.getElementById('camera-status');
+                this.microphoneStatus = document.getElementById('microphone-status');
+                
+                // Error message
+                this.errorMessage = document.getElementById('error-message');
+                
+                console.log('✅ UI Manager initialized');
+            }
+            
+            attachEventListeners() {
+                this.startButton.addEventListener('click', () => window.app.startExperience());
+                this.stopButton.addEventListener('click', () => window.app.stopExperience());
+                this.retryButton.addEventListener('click', () => window.app.startExperience());
+                this.microphoneButton.addEventListener('click', () => window.app.toggleRecording());
+            }
+            
+            showScreen(screenName) {
+                document.querySelectorAll('.screen').forEach(screen => {
+                    screen.classList.remove('active');
+                });
+                const targetScreen = document.getElementById(`${screenName}-screen`);
+                if (targetScreen) {
+                    targetScreen.classList.add('active');
+                }
+            }
+            
+            updateCameraStatus(isActive) {
+                if (this.cameraStatus) {
+                    this.cameraStatus.className = `status-dot ${isActive ? 'active' : 'inactive'}`;
+                }
+            }
+            
+            updateMicrophoneStatus(isActive) {
+                if (this.microphoneStatus) {
+                    this.microphoneStatus.className = `status-dot ${isActive ? 'active' : 'inactive'}`;
+                }
+            }
+            
+            updateMicrophoneButton() {
+                if (this.microphoneButton) {
+                    if (window.app.isRecording) {
+                        this.microphoneButton.innerHTML = '<span class="mic-icon">🔴</span><span class="mic-text">Recording...</span>';
+                        this.microphoneButton.classList.add('recording');
+                    } else {
+                        this.microphoneButton.innerHTML = '<span class="mic-icon">🎤</span><span class="mic-text">Tap to Talk</span>';
+                        this.microphoneButton.classList.remove('recording');
+                    }
+                }
+            }
+            
+            handleError(errorMsg) {
+                console.error('❌ Error:', errorMsg);
+                this.errorMessage.textContent = errorMsg;
+                this.showScreen('error');
+                
+                this.startButton.disabled = false;
+                this.startButton.innerHTML = '<span class="btn-text">Start AR Experience</span><span class="btn-icon">🚀</span>';
+            }
+        }
+
+        // ========================================
+        // MODULE 2: PERMISSIONS & CAMERA
+        // ========================================
+        class CameraManager {
+            constructor(uiManager) {
+                this.ui = uiManager;
+                this.camera = null;
+                this.microphone = null;
+            }
+            
+            async requestPermissions() {
+                try {
+                    console.log('📹 Requesting camera and microphone access...');
+                    
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { 
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                            facingMode: 'user'
+                        },
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        }
+                    });
+                    
+                    this.camera = stream.getVideoTracks()[0];
+                    this.microphone = stream.getAudioTracks()[0];
+                    
+                    if (this.ui.cameraFeed) {
+                        this.ui.cameraFeed.srcObject = stream;
+                    } else {
+                        throw new Error('Camera feed element not found');
+                    }
+                    
+                    console.log('✅ Camera and microphone access granted');
+                    return true;
+                    
+                } catch (error) {
+                    console.error('❌ Permission denied:', error);
+                    
+                    if (error.name === 'NotAllowedError') {
+                        throw new Error('Camera and microphone access is required. Please allow access and try again.');
+                    } else if (error.name === 'NotFoundError') {
+                        throw new Error('No camera or microphone found. Please connect a camera and microphone.');
+                    } else if (error.name === 'NotSupportedError') {
+                        throw new Error('Your browser does not support camera and microphone access.');
+                    } else {
+                        throw new Error('Failed to access camera and microphone. Please check your device settings.');
+                    }
+                }
+            }
+            
+            stop() {
+                if (this.camera) {
+                    this.camera.stop();
+                    this.camera = null;
+                }
+                if (this.microphone) {
+                    this.microphone.stop();
+                    this.microphone = null;
+                }
+                if (this.ui.cameraFeed && this.ui.cameraFeed.srcObject) {
+                    this.ui.cameraFeed.srcObject = null;
+                }
+            }
+        }
+
+        // ========================================
+        // MODULE 3: AUDIO RECORDING & BACKEND
+        // ========================================
+        class AudioManager {
+            constructor(cameraManager) {
+                this.camera = cameraManager;
+                this.isRecording = false;
+                this.mediaRecorder = null;
+                this.audioChunks = [];
+            }
+            
+            async toggleRecording() {
+                if (this.isRecording) {
+                    this.stopRecording();
+                } else {
+                    await this.startRecording();
+                }
+            }
+            
+            async startRecording() {
+                try {
+                    console.log('🎤 Starting audio recording...');
+                    
+                    if (!this.camera.microphone || this.camera.microphone.readyState !== 'live') {
+                        throw new Error('Microphone not available');
+                    }
+                    
+                    const audioStream = new MediaStream([this.camera.microphone]);
+                    this.mediaRecorder = new MediaRecorder(audioStream, {
+                        mimeType: 'audio/webm;codecs=opus'
+                    });
+                    
+                    this.audioChunks = [];
+                    
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            this.audioChunks.push(event.data);
+                        }
+                    };
+                    
+                    this.mediaRecorder.onstop = () => {
+                        this.processRecording();
+                    };
+                    
+                    this.mediaRecorder.start();
+                    this.isRecording = true;
+                    window.app.ui.updateMicrophoneButton();
+                    
+                    console.log('✅ Recording started');
+                    
+                } catch (error) {
+                    console.error('❌ Failed to start recording:', error);
+                    alert('Failed to start recording. Please try again.');
+                }
+            }
+            
+            stopRecording() {
+                if (this.mediaRecorder && this.isRecording) {
+                    console.log('🛑 Stopping audio recording...');
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                    window.app.ui.updateMicrophoneButton();
+                    console.log('✅ Recording stopped');
+                }
+            }
+            
+            async processRecording() {
+                try {
+                    console.log('🔄 Processing recorded audio...');
+                    
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                    
+                    if (audioBlob.size === 0) {
+                        console.warn('⚠️ No audio recorded');
+                        alert('No audio was recorded. Please try again.');
+                        return;
+                    }
+                    
+                    console.log(`📊 Audio blob size: ${audioBlob.size} bytes`);
+                    
+                    const base64Audio = await this.blobToBase64(audioBlob);
+                    await this.sendAudioToServer(base64Audio);
+                    
+                } catch (error) {
+                    console.error('❌ Error processing recording:', error);
+                    alert('Error processing audio. Please try again.');
+                }
+            }
+            
+            async sendAudioToServer(audioData) {
+                try {
+                    console.log('📤 Sending audio to server...');
+                    
+                    const response = await fetch('/api/speech/process', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            audioData: audioData,
+                            sessionId: this.getSessionId(),
+                            language: 'en'
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Server error: ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    console.log('📥 Server response:', result);
+                    
+                    if (result.success) {
+                        await this.handleServerResponse(result);
+                    } else {
+                        throw new Error(result.error || 'Server processing failed');
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Error sending audio to server:', error);
+                    alert('Failed to process audio. Please try again.');
+                }
+            }
+            
+            async handleServerResponse(result) {
+                try {
+                    console.log('🎯 Handling server response...');
+                    
+                    // Start talking animation
+                    if (window.startTalkingAnimation) {
+                        window.startTalkingAnimation();
+                    }
+                    
+                    // Play audio response if available
+                    if (result.audioData) {
+                        await this.playAudioResponse(result.audioData);
+                    }
+                    
+                    // Stop talking animation
+                    if (window.stopTalkingAnimation) {
+                        window.stopTalkingAnimation();
+                    }
+                    
+                    console.log('✅ Response handled successfully');
+                    
+                } catch (error) {
+                    console.error('❌ Error handling server response:', error);
+                }
+            }
+            
+            async playAudioResponse(audioData) {
+                try {
+                    console.log('🔊 Playing audio response...');
+                    
+                    const audioBlob = this.base64ToBlob(audioData, 'audio/wav');
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    const audio = new Audio(audioUrl);
+                    audio.onended = () => {
+                        URL.revokeObjectURL(audioUrl);
+                    };
+                    
+                    await audio.play();
+                    console.log('✅ Audio played successfully');
+                    
+                } catch (error) {
+                    console.error('❌ Error playing audio:', error);
+                }
+            }
+            
+            async blobToBase64(blob) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const base64 = reader.result.split(',')[1];
+                        resolve(base64);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            }
+            
+            base64ToBlob(base64, mimeType) {
+                const byteCharacters = atob(base64);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                return new Blob([byteArray], { type: mimeType });
+            }
+            
+            getSessionId() {
+                let sessionId = sessionStorage.getItem('talkingOrangeSessionId');
+                if (!sessionId) {
+                    sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    sessionStorage.setItem('talkingOrangeSessionId', sessionId);
+                }
+                return sessionId;
+            }
+        }
+
+        // ========================================
+        // MODULE 4: MINDAR IMAGE PROJECTION (FOCUS)
+        // ========================================
+        class MindARManager {
+            constructor(uiManager) {
+                this.ui = uiManager;
+                this.arScene = null;
+                this.marker = null;
+                this.orangePlane = null;
+                this.markerDetected = false;
+            }
+            
+            initialize() {
+                try {
+                    console.log('🍊 Initializing MindAR...');
+                    
+                    if (typeof AFRAME === 'undefined') {
+                        console.error('❌ A-Frame not loaded!');
+                        return;
+                    }
+                    
+                    console.log('✅ A-Frame is available');
+                    console.log('🔍 A-Frame version:', AFRAME.version);
+                    
+                    if (AFRAME.systems['mindar-image-system']) {
+                        console.log('✅ MindAR system found!');
+                        this.createScene();
+                    } else {
+                        console.error('❌ MindAR system not found');
+                        console.log('🔍 Available systems:', Object.keys(AFRAME.systems || {}));
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Failed to initialize MindAR:', error);
+                }
+            }
+            
+            createScene() {
+                console.log('🍊 Creating MindAR scene...');
+                
+                // Create scene element
+                const arScene = document.createElement('a-scene');
+                arScene.setAttribute('mindar-image', 'imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: yes; uiScanning: yes; uiError: yes');
+                arScene.setAttribute('vr-mode-ui', 'enabled: false');
+                arScene.setAttribute('device-orientation-permission-ui', 'enabled: false');
+                arScene.setAttribute('renderer', 'antialias: true; physicallyCorrectLights: true');
+                
+                // Add camera
+                const arCamera = document.createElement('a-camera');
+                arCamera.setAttribute('position', '0 0 0');
+                arCamera.setAttribute('look-controls', 'enabled: false');
+                arScene.appendChild(arCamera);
+                
+                // Add assets
+                const assets = document.createElement('a-assets');
+                assets.innerHTML = `
+                    <img id="talking-orange" src="/talking-orange-transparent.png" />
+                    <img id="talking-orange-mouth-half" src="/talking-orange-mouth-half.png" />
+                    <img id="talking-orange-mouth-open" src="/talking-orange-mouth-open.png" />
+                `;
+                arScene.appendChild(assets);
+                
+                // Add marker target
+                const marker = document.createElement('a-entity');
+                marker.setAttribute('mindar-image-target', 'targetIndex: 0');
+                
+                // Add talking orange plane - EXACT COPY FROM WORKING mindar-local.html
+                const orangePlane = document.createElement('a-plane');
+                orangePlane.setAttribute('id', 'talking-orange-plane');
+                orangePlane.setAttribute('src', '#talking-orange');
+                orangePlane.setAttribute('position', '0 0 0.01');
+                orangePlane.setAttribute('height', '1');
+                orangePlane.setAttribute('width', '1');
+                orangePlane.setAttribute('rotation', '9 0 0');
+                orangePlane.setAttribute('material', 'transparent: true; alphaTest: 0.1; opacity: 1');
+                orangePlane.setAttribute('animation', 'property: position; to: 0 0 0.01; dur: 300; easing: easeInOutQuad; loop: true; dir: alternate');
+                orangePlane.setAttribute('visible', 'true');
+                
+                marker.appendChild(orangePlane);
+                
+                // Add text
+                const text = document.createElement('a-text');
+                text.setAttribute('value', 'TALKING ORANGE');
+                text.setAttribute('position', '0 1.5 0');
+                text.setAttribute('color', 'orange');
+                text.setAttribute('align', 'center');
+                text.setAttribute('animation', 'property: position; to: 0 1.5 0; dur: 300; easing: easeInOutQuad; loop: true; dir: alternate');
+                marker.appendChild(text);
+                
+                arScene.appendChild(marker);
+                
+                // Replace camera feed with MindAR scene
+                const cameraContainer = document.getElementById('camera-feed');
+                if (cameraContainer) {
+                    console.log('🍊 Replacing camera feed with MindAR scene');
+                    
+                    if (cameraContainer.firstChild) {
+                        cameraContainer.removeChild(cameraContainer.firstChild);
+                    }
+                    
+                    cameraContainer.appendChild(arScene);
+                    console.log('🍊 MindAR scene added to camera container');
+                }
+                
+                // Store references
+                this.arScene = arScene;
+                this.marker = marker;
+                this.orangePlane = orangePlane;
+                
+                // Setup event listeners
+                this.setupEventListeners();
+                
+                // Setup talking animation
+                this.setupTalkingAnimation();
+                
+                console.log('🍊 MindAR scene created successfully');
+            }
+            
+            setupEventListeners() {
+                if (this.marker) {
+                    this.marker.addEventListener('targetFound', () => {
+                        console.log('🎯 Target found! Talking orange should be visible');
+                        this.markerDetected = true;
+                        this.onMarkerDetected();
+                    });
+                    
+                    this.marker.addEventListener('targetLost', () => {
+                        console.log('❌ Target lost');
+                        this.markerDetected = false;
+                        this.onMarkerLost();
+                    });
+                }
+            }
+            
+            onMarkerDetected() {
+                console.log('🎉 Talking orange marker detected!');
+                console.log('🎉 MARKER DETECTION SUCCESS! 🎉');
+            }
+            
+            onMarkerLost() {
+                console.log('👋 Talking orange marker no longer visible');
+                
+                if (window.app.audio.isTalking) {
+                    this.stopTalkingAnimation();
+                }
+            }
+            
+            setupTalkingAnimation() {
+                console.log('🍊 Setting up talking animation system');
+                
+                this.mouthStates = ['#talking-orange', '#talking-orange-mouth-half', '#talking-orange-mouth-open'];
+                this.currentMouthState = 0;
+                this.isTalking = false;
+                this.talkingInterval = null;
+                
+                window.startTalkingAnimation = () => {
+                    if (this.isTalking || !this.orangePlane) return;
+                    this.isTalking = true;
+                    console.log('🗣️ Starting talking animation');
+                    
+                    this.talkingInterval = setInterval(() => {
+                        this.currentMouthState = (this.currentMouthState + 1) % this.mouthStates.length;
+                        const newSrc = this.mouthStates[this.currentMouthState];
+                        this.orangePlane.setAttribute('src', newSrc);
+                        console.log('🗣️ Mouth state changed to:', newSrc);
+                    }, 200);
+                };
+                
+                window.stopTalkingAnimation = () => {
+                    if (!this.isTalking || !this.orangePlane) return;
+                    this.isTalking = false;
+                    console.log('🔇 Stopping talking animation');
+                    
+                    if (this.talkingInterval) {
+                        clearInterval(this.talkingInterval);
+                        this.talkingInterval = null;
+                    }
+                    
+                    this.orangePlane.setAttribute('src', '#talking-orange');
+                    this.currentMouthState = 0;
+                    console.log('🔇 Returned to base mouth state');
+                };
+            }
+            
+            stopTalkingAnimation() {
+                if (this.isTalking) {
+                    this.isTalking = false;
+                    if (this.talkingInterval) {
+                        clearInterval(this.talkingInterval);
+                        this.talkingInterval = null;
+                    }
+                    if (this.orangePlane) {
+                        this.orangePlane.setAttribute('src', '#talking-orange');
+                    }
+                }
+            }
+            
+            stop() {
+                console.log('🍊 Stopping MindAR...');
+                
+                if (this.isTalking) {
+                    this.stopTalkingAnimation();
+                }
+                
+                if (this.arScene && this.arScene.parentNode) {
+                    this.arScene.parentNode.removeChild(this.arScene);
+                }
+                
+                delete window.startTalkingAnimation;
+                delete window.stopTalkingAnimation;
+                
+                this.arScene = null;
+                this.marker = null;
+                this.orangePlane = null;
+                this.markerDetected = false;
+                
+                console.log('🍊 MindAR stopped');
+            }
+        }
+
+        // ========================================
+        // MAIN APPLICATION COORDINATOR
+        // ========================================
+        class TalkingOrangeApp {
+            constructor() {
+                this.isActive = false;
+                this.isRecording = false;
+                
+                // Initialize modules
+                this.ui = new UIManager();
+                this.camera = new CameraManager(this.ui);
+                this.audio = new AudioManager(this.camera);
+                this.mindar = new MindARManager(this.ui);
+                
+                console.log('🍊 Talking Orange app initializing...');
+                console.log('✅ Talking Orange app ready!');
+            }
+            
+            async startExperience() {
+                try {
+                    console.log('🍊 Starting Talking Orange experience...');
+                    
+                    // Show loading state
+                    this.ui.startButton.disabled = true;
+                    this.ui.startButton.innerHTML = '<span class="btn-text">Starting...</span><span class="btn-icon">⏳</span>';
+                    
+                    // Request camera and microphone access
+                    await this.camera.requestPermissions();
+                    
+                    // Initialize MindAR
+                    this.mindar.initialize();
+                    
+                    // Show camera screen
+                    this.ui.showScreen('camera');
+                    
+                    // Update status
+                    this.isActive = true;
+                    this.ui.updateCameraStatus(true);
+                    this.ui.updateMicrophoneStatus(true);
+                    this.ui.updateMicrophoneButton();
+                    
+                    // Reset start button
+                    this.ui.startButton.disabled = false;
+                    this.ui.startButton.innerHTML = '<span class="btn-text">Start AR Experience</span><span class="btn-icon">🚀</span>';
+                    
+                    console.log('🎉 Talking Orange experience started successfully!');
+                    
+                } catch (error) {
+                    console.error('❌ Failed to start experience:', error);
+                    this.ui.handleError(error.message);
+                }
+            }
+            
+            stopExperience() {
+                console.log('🛑 Stopping Talking Orange experience...');
+                
+                // Stop recording if active
+                if (this.audio.isRecording) {
+                    this.audio.stopRecording();
+                }
+                
+                // Stop MindAR
+                this.mindar.stop();
+                
+                // Stop camera
+                this.camera.stop();
+                
+                // Reset status
+                this.isActive = false;
+                this.isRecording = false;
+                this.ui.updateCameraStatus(false);
+                this.ui.updateMicrophoneStatus(false);
+                this.ui.updateMicrophoneButton();
+                
+                // Return to welcome screen
+                this.ui.showScreen('welcome');
+                
+                console.log('✅ Experience stopped');
+            }
+            
+            async toggleRecording() {
+                await this.audio.toggleRecording();
+            }
+            
+        }
+
+        // Initialize the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            window.app = new TalkingOrangeApp();
+            
+            // Make modules globally available for debugging
+            window.ui = window.app.ui;
+            window.camera = window.app.camera;
+            window.audio = window.app.audio;
+            window.mindar = window.app.mindar;
+        });
+
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && window.app && window.app.isActive) {
+                console.log('📱 Page hidden, but keeping camera active');
+            } else if (!document.hidden && window.app && window.app.isActive) {
+                console.log('📱 Page visible again');
+            }
+        });
+
+        // Handle page unload
+        window.addEventListener('beforeunload', () => {
+            if (window.app && window.app.isActive) {
+                window.app.stopExperience();
+            }
+        });
+
+    </script>
 </body>
 </html>
