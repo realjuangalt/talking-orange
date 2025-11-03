@@ -4,8 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <title>Talking Orange AR</title>
-    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <script src="./lib/aframe.min.js"></script>
+    <script src="./lib/mindar-image-aframe.prod.js"></script>
     <style>
         /* Mobile-friendly styles */
         @media (max-width: 768px) {
@@ -58,26 +58,26 @@
     </style>
 </head>
 <body>
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; uiLoading: yes; uiScanning: yes; uiError: yes;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="antialias: true; physicallyCorrectLights: true">
+    <a-scene mindar-image="imageTargetSrc: ./media/targets.mind; maxTrack: 1; uiLoading: yes; uiScanning: yes; uiError: yes;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="antialias: true; physicallyCorrectLights: false">
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
         <a-assets>
-            <img id="talking-orange" src="./talking-orange-smile.png" />
-            <img id="talking-orange-open-mouth" src="./talking-orange-open-mouth.png" />
-            <img id="talking-orange-half-open-mouth" src="./talking-orange-half-open-mouth.png" />
-            <img id="talking-orange-thinking-1" src="./talking-orange-thinking-1.png" />
-            <img id="talking-orange-thinking-2" src="./talking-orange-thinking-2.png" />
+            <!-- Images for idle state -->
+            <img id="talking-orange" src="./media/talking-orange-smile.png" />
+            <!-- Images for thinking state -->
+
+            <img id="talking-orange-thinking-1" src="./media/talking-orange-thinking-1.png" />
+            <img id="talking-orange-thinking-2" src="./media/talking-orange-thinking-2.png" />
+            
+            <!-- Images for talking animation (mouth opening/closing) -->
+            <img id="talking-orange-talking-1" src="./media/talking-orange-talking-1.png" />
+            <img id="talking-orange-talking-2" src="./media/talking-orange-talking-2.png" />
         </a-assets>
         
         <a-entity mindar-image-target="targetIndex: 0">
-            <!-- Project the talking orange image as a plane overlay with smoothing -->
+            <!-- Image plane for all states (idle, thinking, talking) -->
             <a-plane id="talking-orange-plane" src="#talking-orange" position="0 0 0.01" height="1" width="1" rotation="9 0 0" 
-                     material="transparent: true; alphaTest: 0.1; opacity: 1"
+                     material="shader: flat; transparent: true; alphaTest: 0.1; opacity: 1"
                      animation="property: position; to: 0 0 0.01; dur: 300; easing: easeInOutQuad; loop: true; dir: alternate"></a-plane>
-            
-            <!-- Additional 3D objects with smoothing (cube removed) -->
-           
-            <a-text value="TALKING ORANGE" position="0 1.5 0" color="orange" align="center" 
-                    animation="property: position; to: 0 1.5 0; dur: 300; easing: easeInOutQuad; loop: true; dir: alternate"></a-text>
         </a-entity>
     </a-scene>
     
@@ -115,17 +115,19 @@
             class TalkingAnimationModule {
                 constructor(orangePlane) {
                     this.orangePlane = orangePlane;
-                    this.idleState = { id: '#talking-orange', name: 'smile', src: './talking-orange-smile.png' };
-                    this.talkingStates = [
-                        { id: '#talking-orange-half-open-mouth', name: 'half-open', src: './talking-orange-half-open-mouth.png' },
-                        { id: '#talking-orange-open-mouth', name: 'wide-open', src: './talking-orange-open-mouth.png' }
-                    ];
+                    
+                    this.idleState = { id: '#talking-orange', name: 'smile', src: './media/talking-orange-smile.png' };
                     this.thinkingStates = [
-                        { id: '#talking-orange-thinking-1', name: 'thinking-1', src: './talking-orange-thinking-1.png' },
-                        { id: '#talking-orange-thinking-2', name: 'thinking-2', src: './talking-orange-thinking-2.png' }
+                        { id: '#talking-orange-thinking-1', name: 'thinking-1', src: './media/talking-orange-thinking-1.png' },
+                        { id: '#talking-orange-thinking-2', name: 'thinking-2', src: './media/talking-orange-thinking-2.png' }
                     ];
-                    this.currentTalkingState = 0;
+                    
+                    // Load talking states dynamically (sorted by number: 1, 2, 3, etc.)
+                    this.talkingStates = this.loadTalkingStates();
+                    
                     this.currentThinkingState = 0;
+                    this.currentTalkingState = 0;
+                    this.talkingDirection = 1; // 1 = forward (opening), -1 = backward (closing)
                     this.isTalking = false;
                     this.isThinking = false;
                     this.talkingInterval = null;
@@ -139,43 +141,41 @@
                 init() {
                     console.log('🎭 Initializing Talking Animation Module');
                     this.debugImageLoading();
-                    this.preprocessImages();
-                    // Removed testAllMouthStates() - animation only happens during voice playback
                 }
                 
-                preprocessImages() {
-                    console.log('🔧 Preprocessing images for consistent dimensions...');
+                loadTalkingStates() {
+                    // Dynamically load all talking images (talking-orange-talking-N.png)
+                    // They're already in assets, we just need to create state objects
+                    const states = [];
+                    let index = 1;
                     
-                    // Find the reference dimensions (use the transparent PNG as reference)
-                    const referenceImg = document.querySelector('img[id="talking-orange"]');
-                    if (!referenceImg) {
-                        console.error('❌ Reference image not found');
+                    while (true) {
+                        const imgElement = document.querySelector(`img[id="talking-orange-talking-${index}"]`);
+                        if (imgElement) {
+                            states.push({
+                                id: `#talking-orange-talking-${index}`,
+                                name: `talking-${index}`,
+                                src: `./media/talking-orange-talking-${index}.png`
+                            });
+                            index++;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    console.log(`✅ Loaded ${states.length} talking animation states:`, states.map(s => s.name));
+                    return states;
+                }
+                
+                setToTalkingState(stateIndex) {
+                    if (stateIndex < 0 || stateIndex >= this.talkingStates.length) {
+                        console.error(`❌ Invalid talking state index: ${stateIndex}`);
                         return;
                     }
                     
-                    const refWidth = referenceImg.naturalWidth;
-                    const refHeight = referenceImg.naturalHeight;
-                    
-                    console.log(`📏 Reference dimensions: ${refWidth}x${refHeight}`);
-                    
-                    // Check idle state (closed mouth)
-                    console.log(`🖼️ Idle state (${this.idleState.name}): ${refWidth}x${refHeight}`);
-                    
-                    // Process talking states
-                    this.talkingStates.forEach((state, index) => {
-                        const img = document.querySelector(`img[id="${state.id.replace('#', '')}"]`);
-                        if (img) {
-                            const currentWidth = img.naturalWidth;
-                            const currentHeight = img.naturalHeight;
-                            
-                            console.log(`🖼️ Talking state ${index + 1} (${state.name}): ${currentWidth}x${currentHeight}`);
-                            
-                            if (currentWidth !== refWidth || currentHeight !== refHeight) {
-                                console.log(`⚠️ Dimension mismatch detected for ${state.name}`);
-                                console.log(`   Expected: ${refWidth}x${refHeight}, Got: ${currentWidth}x${currentHeight}`);
-                            }
-                        }
-                    });
+                    const state = this.talkingStates[stateIndex];
+                    console.log(`🗣️ Setting to talking state: ${state.name}`);
+                    this.applyTextureFromState(state);
                 }
                 
                 debugImageLoading() {
@@ -187,203 +187,75 @@
                         console.log(`✅ Idle image (${this.idleState.name}):`, {
                             id: this.idleState.id,
                             src: this.idleState.src,
-                            loaded: idleImg.complete,
-                            naturalWidth: idleImg.naturalWidth,
-                            naturalHeight: idleImg.naturalHeight
+                            loaded: idleImg.complete
                         });
                     }
-                    
-                    // Check talking states
-                    this.talkingStates.forEach((state, index) => {
-                        const img = document.querySelector(`img[id="${state.id.replace('#', '')}"]`);
-                        if (img) {
-                            console.log(`✅ Talking image ${index + 1} (${state.name}):`, {
-                                id: state.id,
-                                src: state.src,
-                                loaded: img.complete,
-                                naturalWidth: img.naturalWidth,
-                                naturalHeight: img.naturalHeight
-                            });
-                            
-                            // Add load event listener
-                            img.addEventListener('load', () => {
-                                console.log(`🖼️ Image loaded successfully: ${state.name}`);
-                            });
-                            
-                            img.addEventListener('error', () => {
-                                console.error(`❌ Image failed to load: ${state.name} (${state.src})`);
-                            });
-                        } else {
-                            console.error(`❌ Image element not found: ${state.id}`);
-                        }
-                    });
                 }
-                
-                resetMaterialProperties() {
-                    try {
-                        console.log('🔄 Resetting material properties...');
-                        const material = this.orangePlane.getObject3D('mesh').material;
-                        
-                        // Reset material properties to prevent color degradation
-                        material.opacity = 1.0;
-                        material.transparent = true;
-                        material.alphaTest = 0.1;
-                        
-                        // Safely reset color properties
-                        if (material.color) material.color.setHex(0xffffff); // Reset to white
-                        if (material.emissive) material.emissive.setHex(0x000000); // Reset emissive
-                        if (material.specular) material.specular.setHex(0x111111); // Reset specular
-                        
-                        // Ensure no color filters are applied
-                        if (material.map) {
-                            material.map.colorSpace = THREE.SRGBColorSpace;
-                        }
-                        
-                        material.needsUpdate = true;
-                        console.log('✅ Material properties reset');
-                        
-                    } catch (error) {
-                        console.error('❌ Error resetting material properties:', error);
-                    }
-                }
-                
                 
                 setToIdleState() {
-                    console.log('🎭 Setting to idle state (closed mouth)');
+                    console.log('🎭 Setting to idle state (smile)');
                     this.isIdle = true;
-                    this.resetMaterialProperties();
-                    this.applyTextureFromState(this.idleState);
                     
-                    // Fix upside down smile image by adjusting rotation
-                    this.orangePlane.setAttribute('rotation', '9 0 180');
-                }
-                
-                setToTalkingState(stateIndex) {
-                    if (stateIndex < 0 || stateIndex >= this.talkingStates.length) {
-                        console.error(`❌ Invalid talking state index: ${stateIndex}`);
-                        return;
+                    // Show image plane
+                    const imageMesh = this.orangePlane.getObject3D('mesh');
+                    if (imageMesh) {
+                        imageMesh.visible = true;
                     }
                     
-                    const state = this.talkingStates[stateIndex];
-                    this.currentTalkingState = stateIndex;
-                    this.isIdle = false;
-                    
-                    console.log(`🎭 Setting to talking state: ${state.name} (${state.id})`);
-                    this.applyTextureFromState(state);
-                    
-                    // Fix upside down talking images by adjusting rotation
-                    this.orangePlane.setAttribute('rotation', '9 0 180');
+                    // Show smile image
+                    this.applyTextureFromState(this.idleState);
                 }
                 
                 applyTextureFromState(state) {
-                    // Get the image element
                     const img = document.querySelector(`img[id="${state.id.replace('#', '')}"]`);
                     if (!img) {
                         console.error(`❌ Image not found: ${state.id}`);
                         return;
                     }
                     
-                    // Recreate material with the new image
                     this.recreateMaterial(img);
                 }
                 
                 recreateMaterial(img) {
                     try {
-                        console.log('🔄 Recreating material for texture change...');
+                        const mesh = this.orangePlane.getObject3D('mesh');
+                        const texture = new THREE.Texture(img);
+                        texture.needsUpdate = true;
+                        texture.colorSpace = THREE.SRGBColorSpace;
+                        texture.flipY = true;
                         
-                        // Get reference dimensions
-                        const referenceImg = document.querySelector('img[id="talking-orange"]');
-                        const refWidth = referenceImg.naturalWidth;
-                        const refHeight = referenceImg.naturalHeight;
+                        // Use MeshBasicMaterial - doesn't respond to lighting (no shading)
+                        const material = new THREE.MeshBasicMaterial({
+                            map: texture,
+                            transparent: true,
+                            alphaTest: 0.1,
+                            opacity: 1.0,
+                            side: THREE.DoubleSide
+                        });
                         
-                        // Check if resizing is needed
-                        if (img.naturalWidth !== refWidth || img.naturalHeight !== refHeight) {
-                            console.log('🔄 Image dimensions mismatch, resizing...');
-                            
-                            // Resize image to match reference
-                            const resizedDataURL = this.resizeImageToCanvas(img, refWidth, refHeight);
-                            if (resizedDataURL) {
-                                // Create new image with resized data
-                                const resizedImg = new Image();
-                                resizedImg.onload = () => {
-                                    this.applyTextureToMaterial(resizedImg);
-                                };
-                                resizedImg.src = resizedDataURL;
-                                return;
-                            }
+                        // Dispose old material if it exists
+                        if (mesh.material && mesh.material.map) {
+                            mesh.material.map.dispose();
+                            mesh.material.dispose();
                         }
                         
-                        // Use original image if no resizing needed
-                        this.applyTextureToMaterial(img);
+                        mesh.material = material;
                         
                     } catch (error) {
                         console.error('❌ Error recreating material:', error);
-                        
-                        // Fallback: Try the old method
-                        console.log('🔄 Trying fallback method...');
                         this.orangePlane.setAttribute('src', img.id);
                     }
                 }
                 
-                resizeImageToCanvas(img, targetWidth, targetHeight) {
-                    try {
-                        console.log(`🔄 Resizing image to ${targetWidth}x${targetHeight}...`);
-                        
-                        // Create canvas
-                        const canvas = document.createElement('canvas');
-                        canvas.width = targetWidth;
-                        canvas.height = targetHeight;
-                        const ctx = canvas.getContext('2d');
-                        
-                        // Draw resized image
-                        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-                        
-                        // Convert to data URL
-                        const dataURL = canvas.toDataURL('image/png');
-                        
-                        console.log('✅ Image resized successfully');
-                        return dataURL;
-                        
-                    } catch (error) {
-                        console.error('❌ Error resizing image:', error);
-                        return null;
+                setToThinkingState(stateIndex) {
+                    if (stateIndex < 0 || stateIndex >= this.thinkingStates.length) {
+                        console.error(`❌ Invalid thinking state index: ${stateIndex}`);
+                        return;
                     }
-                }
-                
-                applyTextureToMaterial(img) {
-                    try {
-                        console.log('🔄 Applying texture to material...');
-                        
-                        // Get the current material
-                        const material = this.orangePlane.getObject3D('mesh').material;
-                        
-                        // Dispose of the old texture to prevent memory leaks
-                        if (material.map) {
-                            material.map.dispose();
-                        }
-                        
-                        // Create a new texture from the image
-                        const texture = new THREE.Texture(img);
-                        texture.needsUpdate = true;
-                        texture.colorSpace = THREE.SRGBColorSpace; // Ensure correct color space
-                        texture.flipY = false; // Prevent texture flipping
-                        
-                        // Update the material's map
-                        material.map = texture;
-                        material.needsUpdate = true;
-                        
-                        // Force material update
-                        this.orangePlane.getObject3D('mesh').material = material;
-                        
-                        console.log('✅ Material updated successfully');
-                        
-                    } catch (error) {
-                        console.error('❌ Error applying texture:', error);
-                        
-                        // Fallback: Try the old method
-                        console.log('🔄 Trying fallback method...');
-                        this.orangePlane.setAttribute('src', img.id);
-                    }
+                    
+                    const state = this.thinkingStates[stateIndex];
+                    console.log(`🤔 Setting to thinking state: ${state.name}`);
+                    this.applyTextureFromState(state);
                 }
                 
                 startTalkingAnimation() {
@@ -392,14 +264,43 @@
                         return;
                     }
                     
-                    this.isTalking = true;
-                    console.log('🗣️ Starting talking animation (loop between half-open and open)');
+                    if (this.talkingStates.length === 0) {
+                        console.error('❌ No talking states available');
+                        return;
+                    }
                     
-                    // Start cycling between half-open and open mouth
+                    this.isTalking = true;
+                    this.isIdle = false;
+                    this.currentTalkingState = 0;
+                    this.talkingDirection = 1; // Start opening mouth
+                    
+                    console.log(`🗣️ Starting talking animation with ${this.talkingStates.length} states`);
+                    
+                    // Ensure image plane is visible
+                    const imageMesh = this.orangePlane.getObject3D('mesh');
+                    if (imageMesh) {
+                        imageMesh.visible = true;
+                    }
+                    
+                    // Start with first talking state
+                    this.setToTalkingState(this.currentTalkingState);
+                    
+                    // Cycle through talking images forward then backward (opening/closing mouth)
                     this.talkingInterval = setInterval(() => {
-                        const nextState = (this.currentTalkingState + 1) % this.talkingStates.length;
-                        this.setToTalkingState(nextState);
-                    }, 200); // Change mouth every 200ms
+                        // Check boundaries before moving
+                        if (this.currentTalkingState >= this.talkingStates.length - 1 && this.talkingDirection === 1) {
+                            // At max, reverse direction
+                            this.talkingDirection = -1; // Start closing
+                        } else if (this.currentTalkingState <= 0 && this.talkingDirection === -1) {
+                            // At min, reverse direction
+                            this.talkingDirection = 1; // Start opening
+                        }
+                        
+                        // Move to next state based on direction
+                        this.currentTalkingState += this.talkingDirection;
+                        
+                        this.setToTalkingState(this.currentTalkingState);
+                    }, 200); // Fast animation for mouth movement
                 }
                 
                 stopTalkingAnimation() {
@@ -411,12 +312,13 @@
                     this.isTalking = false;
                     console.log('🔇 Stopping talking animation, returning to idle');
                     
+                    // Clear talking interval
                     if (this.talkingInterval) {
                         clearInterval(this.talkingInterval);
                         this.talkingInterval = null;
                     }
                     
-                    // Return to closed mouth (idle state)
+                    // Return to idle state
                     this.setToIdleState();
                 }
                 
@@ -429,6 +331,12 @@
                     console.log('🤔 Starting thinking animation...');
                     this.isThinking = true;
                     this.isIdle = false;
+                    
+                    // Show image plane
+                    const imageMesh = this.orangePlane.getObject3D('mesh');
+                    if (imageMesh) {
+                        imageMesh.visible = true;
+                    }
                     
                     // Cycle through thinking states
                     this.thinkingInterval = setInterval(() => {
@@ -454,32 +362,15 @@
                     console.log('✅ Thinking animation stopped');
                 }
                 
-                setToThinkingState(stateIndex) {
-                    if (stateIndex < 0 || stateIndex >= this.thinkingStates.length) {
-                        console.error(`❌ Invalid thinking state index: ${stateIndex}`);
-                        return;
-                    }
-                    
-                    const state = this.thinkingStates[stateIndex];
-                    console.log(`🤔 Setting to thinking state: ${state.name} (${state.id})`);
-                    
-                    // Apply texture
-                    this.applyTextureFromState(state);
-                    
-                    // Fix upside down thinking images by adjusting rotation
-                    this.orangePlane.setAttribute('rotation', '9 0 180'); // Flip 180 degrees
-                }
-                
                 getStatus() {
                     return {
                         isTalking: this.isTalking,
                         isThinking: this.isThinking,
                         isIdle: this.isIdle,
-                        currentTalkingState: this.currentTalkingState,
                         currentThinkingState: this.currentThinkingState,
                         currentStateName: this.isIdle ? this.idleState.name : 
                                         this.isThinking ? this.thinkingStates[this.currentThinkingState].name :
-                                        this.talkingStates[this.currentTalkingState].name,
+                                        'talking-images',
                         planeSrc: this.orangePlane.getAttribute('src')
                     };
                 }
@@ -716,17 +607,12 @@
                     });
                     
                     setTimeout(() => {
-                        console.log('Testing talking states');
-                        animationModule.talkingStates.forEach((state, index) => {
-                            setTimeout(() => {
-                                console.log(`Testing talking state ${index + 1}: ${state.name}`);
-                                animationModule.setToTalkingState(index);
-                            }, index * 1000);
-                        });
+                        console.log('Testing talking animation (images)');
+                        animationModule.startTalkingAnimation();
                         
                         // Return to idle after testing
                         setTimeout(() => {
-                            animationModule.setToIdleState();
+                            animationModule.stopTalkingAnimation();
                             console.log('✅ Debug test completed - returned to idle');
                         }, 3000);
                     }, 2000);
