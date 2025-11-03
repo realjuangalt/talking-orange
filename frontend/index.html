@@ -15,6 +15,13 @@
                 min-width: 180px !important;
             }
             
+            #test-thinking-btn, #test-talking-btn {
+                padding: 12px 16px !important;
+                font-size: 20px !important;
+                min-width: 50px !important;
+                min-height: 50px !important;
+            }
+            
             .language-toggle, .debug-controls {
                 padding: 6px !important;
                 font-size: 11px !important;
@@ -39,6 +46,13 @@
                 bottom: 15px !important;
             }
             
+            #test-thinking-btn, #test-talking-btn {
+                padding: 10px 14px !important;
+                font-size: 18px !important;
+                min-width: 48px !important;
+                min-height: 48px !important;
+            }
+            
             .language-toggle, .debug-controls {
                 padding: 4px !important;
                 font-size: 10px !important;
@@ -58,19 +72,22 @@
     </style>
 </head>
 <body>
-    <a-scene mindar-image="imageTargetSrc: ./media/targets.mind; maxTrack: 1; uiLoading: yes; uiScanning: yes; uiError: yes;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="antialias: true; physicallyCorrectLights: false">
+    <a-scene mindar-image="imageTargetSrc: ./media/targets.mind; maxTrack: 1; missTolerance: 15; warmupTolerance: 3; filterMinCF: 0.0005; filterBeta: 20000; uiLoading: yes; uiScanning: yes; uiError: yes;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="antialias: true; physicallyCorrectLights: false">
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
         <a-assets>
             <!-- Images for idle state -->
             <img id="talking-orange" src="./media/talking-orange-smile.png" />
+            <img id="talking-orange-wink" src="./media/talking-orange-wink.png" />
+            
             <!-- Images for thinking state -->
-
             <img id="talking-orange-thinking-1" src="./media/talking-orange-thinking-1.png" />
             <img id="talking-orange-thinking-2" src="./media/talking-orange-thinking-2.png" />
             
             <!-- Images for talking animation (mouth opening/closing) -->
             <img id="talking-orange-talking-1" src="./media/talking-orange-talking-1.png" />
             <img id="talking-orange-talking-2" src="./media/talking-orange-talking-2.png" />
+            <img id="talking-orange-talking-3" src="./media/talking-orange-talking-3.png" />
+            <img id="talking-orange-talking-4" src="./media/talking-orange-talking-4.png" />
         </a-assets>
         
         <a-entity mindar-image-target="targetIndex: 0">
@@ -89,11 +106,24 @@
         </button>
     </div>
     
-    <!-- Main Ask Question Button (bottom center) -->
-    <div style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;">
+    <!-- Main Controls (bottom center) -->
+    <div style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; display: flex; gap: 10px; align-items: center;">
         <button id="ask-question-btn" onclick="window.askQuestion()" 
                 style="background: #2196F3; color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 4px 8px rgba(0,0,0,0.3); min-width: 200px;">
             Ask Question
+        </button>
+        
+        <!-- Test Animation Buttons -->
+        <button id="test-thinking-btn" onclick="window.testThinkingAnimation()" 
+                title="Test Thinking Animation"
+                style="background: rgba(156, 39, 176, 0.8); color: white; border: none; padding: 15px 20px; border-radius: 25px; cursor: pointer; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.3); min-width: 60px; min-height: 60px;">
+            🤔
+        </button>
+        
+        <button id="test-talking-btn" onclick="window.testTalkingAnimation()" 
+                title="Test Talking Animation"
+                style="background: rgba(255, 152, 0, 0.8); color: white; border: none; padding: 15px 20px; border-radius: 25px; cursor: pointer; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.3); min-width: 60px; min-height: 60px;">
+            🗣️
         </button>
     </div>
     
@@ -125,9 +155,20 @@
                     // Load talking states dynamically (sorted by number: 1, 2, 3, etc.)
                     this.talkingStates = this.loadTalkingStates();
                     
+                    // Load frame-based animations if available (advanced)
+                    this.talkingFrames = [];
+                    this.thinkingFrames = [];
+                    this.talkingTextures = {}; // Cache for preloaded textures
+                    this.thinkingTextures = {}; // Cache for preloaded textures
+                    this.frameMaterial = null; // Reusable material for frame animations
+                    this.useFrameAnimations = false;
+                    
                     this.currentThinkingState = 0;
                     this.currentTalkingState = 0;
+                    this.currentThinkingFrame = 0;
+                    this.currentTalkingFrame = 0;
                     this.talkingDirection = 1; // 1 = forward (opening), -1 = backward (closing)
+                    this.fallbackTestMode = false; // When true, fallback animations stop after one cycle
                     this.isTalking = false;
                     this.isThinking = false;
                     this.talkingInterval = null;
@@ -140,7 +181,175 @@
                 
                 init() {
                     console.log('🎭 Initializing Talking Animation Module');
+                    // Load frame animations asynchronously (non-blocking)
+                    // This allows MindAR to initialize immediately while frames load in background
+                    this.loadFrameAnimations().catch(err => {
+                        console.warn('⚠️ Frame animation loading error (non-critical):', err);
+                    });
                     this.debugImageLoading();
+                }
+                
+                async loadFrameAnimations() {
+                    // Try to load frame-based animations from video folders
+                    // Optimized: Skip slow discovery - we know there are 145 frames
+                    // Just check if first frame exists, then generate all paths
+                    try {
+                        // Quick check if talking animation exists (single HEAD request)
+                        const talkingResponse = await fetch('./media/videos/talking-orange-talking-animation/frame_00000.png', { method: 'HEAD' });
+                        if (talkingResponse.ok) {
+                            // Generate frame paths directly (no sequential discovery needed)
+                            this.talkingFrames = this.generateFramePaths('talking-orange-talking-animation', 145);
+                            console.log(`✅ Generated ${this.talkingFrames.length} talking animation frame paths`);
+                        }
+                        
+                        // Quick check if thinking animation exists (single HEAD request)
+                        const thinkingResponse = await fetch('./media/videos/talking-orange-thinking-animation/frame_00000.png', { method: 'HEAD' });
+                        if (thinkingResponse.ok) {
+                            // Generate frame paths directly (no sequential discovery needed)
+                            this.thinkingFrames = this.generateFramePaths('talking-orange-thinking-animation', 145);
+                            console.log(`✅ Generated ${this.thinkingFrames.length} thinking animation frame paths`);
+                        }
+                        
+                        // Use frame animations if we have them
+                        if (this.talkingFrames.length > 0 || this.thinkingFrames.length > 0) {
+                            this.useFrameAnimations = true;
+                            console.log('🎬 Using frame-based animations (advanced mode)');
+                            
+                            // First: Preload images to browser cache (downloads all files)
+                            if (this.talkingFrames.length > 0) {
+                                console.log('📥 Downloading talking animation images to browser cache...');
+                                await this.preloadImagesToCache(this.talkingFrames, 'talking');
+                            }
+                            if (this.thinkingFrames.length > 0) {
+                                console.log('📥 Downloading thinking animation images to browser cache...');
+                                await this.preloadImagesToCache(this.thinkingFrames, 'thinking');
+                            }
+                            
+                            // Then: Preload all textures for instant display (images already in cache)
+                            if (this.talkingFrames.length > 0) {
+                                console.log('🔄 Preloading talking animation textures...');
+                                await this.preloadTextures(this.talkingFrames, this.talkingTextures, 'talking');
+                            }
+                            if (this.thinkingFrames.length > 0) {
+                                console.log('🔄 Preloading thinking animation textures...');
+                                await this.preloadTextures(this.thinkingFrames, this.thinkingTextures, 'thinking');
+                            }
+                            
+                            // Advanced animations fully loaded - show wink as confirmation
+                            console.log('✨ Advanced animations fully loaded!');
+                            this.showWinkConfirmation();
+                        } else {
+                            console.log('🖼️  Using image-based animations (fallback mode)');
+                        }
+                    } catch (error) {
+                        console.log('🖼️  Frame animations not found, using image-based animations');
+                        this.useFrameAnimations = false;
+                    }
+                }
+                
+                // Generate frame paths directly (much faster than sequential discovery)
+                generateFramePaths(folderName, frameCount) {
+                    const frames = [];
+                    for (let i = 0; i < frameCount; i++) {
+                        const framePath = `./media/videos/${folderName}/frame_${String(i).padStart(5, '0')}.png`;
+                        frames.push(framePath);
+                    }
+                    return frames;
+                }
+                
+                // Legacy discovery method (kept for fallback if frame count is unknown)
+                async discoverFrames(folderName) {
+                    const frames = [];
+                    let frameIndex = 0;
+                    
+                    while (true) {
+                        const framePath = `./media/videos/${folderName}/frame_${String(frameIndex).padStart(5, '0')}.png`;
+                        try {
+                            // Use HEAD request to check if frame exists without downloading it
+                            // This avoids downloading full images just to check existence
+                            const response = await fetch(framePath, { 
+                                method: 'HEAD',
+                                // Suppress error logging for expected 404s
+                                cache: 'no-cache'
+                            });
+                            
+                            if (response.ok) {
+                                frames.push(framePath);
+                                frameIndex++;
+                            } else if (response.status === 404) {
+                                // Frame doesn't exist - since frames are sequential, we've reached the end
+                                break;
+                            } else {
+                                // Other error (e.g., 403, 500) - also stop
+                                break;
+                            }
+                        } catch (error) {
+                            // Network error or other issue - stop searching
+                            // This is expected when we reach the end of the sequence
+                            break;
+                        }
+                    }
+                    
+                    return frames;
+                }
+                
+                async preloadImagesToCache(framePaths, animationType) {
+                    // Preload images to browser cache using Image objects
+                    // This downloads all files so they're cached when we need them
+                    const loadPromises = framePaths.map((framePath, index) => {
+                        return new Promise((resolve) => {
+                            const img = new Image();
+                            img.onload = () => {
+                                if ((index + 1) % 20 === 0 || index === framePaths.length - 1) {
+                                    console.log(`   ✅ Cached ${index + 1}/${framePaths.length} ${animationType} images`);
+                                }
+                                resolve();
+                            };
+                            img.onerror = (error) => {
+                                console.warn(`⚠️ Failed to cache ${framePath}`);
+                                resolve(); // Continue with other images
+                            };
+                            img.src = framePath; // Trigger download
+                        });
+                    });
+                    
+                    await Promise.all(loadPromises);
+                    console.log(`✅ All ${framePaths.length} ${animationType} images cached in browser!`);
+                }
+                
+                async preloadTextures(framePaths, textureCache, animationType) {
+                    // Preload all textures in parallel for instant display
+                    const loader = new THREE.TextureLoader();
+                    const loadPromises = framePaths.map((framePath, index) => {
+                        return new Promise((resolve) => {
+                            loader.load(
+                                framePath,
+                                (texture) => {
+                                    texture.colorSpace = THREE.SRGBColorSpace;
+                                    texture.flipY = true;
+                                    
+                                    // Preserve aspect ratio - center the texture and maintain proportions
+                                    texture.center.set(0.5, 0.5);
+                                    // Set repeat to 1,1 to avoid tiling
+                                    texture.repeat.set(1, 1);
+                                    
+                                    textureCache[framePath] = texture;
+                                    if ((index + 1) % 20 === 0 || index === framePaths.length - 1) {
+                                        console.log(`✅ Preloaded ${index + 1}/${framePaths.length} ${animationType} textures`);
+                                    }
+                                    resolve();
+                                },
+                                undefined,
+                                (error) => {
+                                    console.error(`❌ Error preloading ${framePath}:`, error);
+                                    resolve(); // Continue loading other frames
+                                }
+                            );
+                        });
+                    });
+                    
+                    await Promise.all(loadPromises);
+                    console.log(`✅ All ${framePaths.length} ${animationType} textures preloaded and ready!`);
                 }
                 
                 loadTalkingStates() {
@@ -202,8 +411,21 @@
                         imageMesh.visible = true;
                     }
                     
-                    // Show smile image
-                    this.applyTextureFromState(this.idleState);
+                    // Force apply smile image using direct texture application (not setAttribute to avoid geometry changes)
+                    try {
+                        this.applyTextureFromState(this.idleState);
+                        // Ensure geometry stays at 1x1 (A-Frame's setAttribute('src') can change geometry)
+                        this.orangePlane.setAttribute('geometry', { width: 1, height: 1 });
+                        console.log('✅ Idle state applied (smile image)');
+                    } catch (error) {
+                        console.error('❌ Error setting idle state:', error);
+                        // Last resort: use src but immediately reset geometry
+                        this.orangePlane.setAttribute('src', this.idleState.id);
+                        // Force geometry back to 1x1 after src is set
+                        setTimeout(() => {
+                            this.orangePlane.setAttribute('geometry', { width: 1, height: 1 });
+                        }, 10);
+                    }
                 }
                 
                 applyTextureFromState(state) {
@@ -219,10 +441,20 @@
                 recreateMaterial(img) {
                     try {
                         const mesh = this.orangePlane.getObject3D('mesh');
+                        
+                        // Keep plane geometry fixed at 1x1 (flat 2D surface)
+                        // Reset to 1x1 to ensure consistency
+                        this.orangePlane.setAttribute('geometry', { width: 1, height: 1 });
+                        
                         const texture = new THREE.Texture(img);
                         texture.needsUpdate = true;
                         texture.colorSpace = THREE.SRGBColorSpace;
                         texture.flipY = true;
+                        
+                        // Center the texture - always centered regardless of aspect ratio
+                        texture.center.set(0.5, 0.5);
+                        texture.repeat.set(1, 1);
+                        texture.offset.set(0, 0);
                         
                         // Use MeshBasicMaterial - doesn't respond to lighting (no shading)
                         const material = new THREE.MeshBasicMaterial({
@@ -233,17 +465,120 @@
                             side: THREE.DoubleSide
                         });
                         
-                        // Dispose old material if it exists
-                        if (mesh.material && mesh.material.map) {
-                            mesh.material.map.dispose();
-                            mesh.material.dispose();
-                        }
-                        
+                        // Don't dispose materials - just replace them
+                        // Disposal can interfere with MindAR's internal state
                         mesh.material = material;
+                        
+                        // Reset frameMaterial reference since we're now using a different material
+                        // This ensures frame animations create a fresh material
+                        this.frameMaterial = null;
                         
                     } catch (error) {
                         console.error('❌ Error recreating material:', error);
+                        // Last resort: use src but immediately reset geometry
                         this.orangePlane.setAttribute('src', img.id);
+                        // Force geometry back to 1x1 after src is set (A-Frame might change it)
+                        setTimeout(() => {
+                            this.orangePlane.setAttribute('geometry', { width: 1, height: 1 });
+                        }, 10);
+                    }
+                }
+                
+                applyTextureFromFrame(framePath) {
+                    const mesh = this.orangePlane.getObject3D('mesh');
+                    
+                    if (!mesh) {
+                        console.error('❌ Mesh not found in applyTextureFromFrame');
+                        return;
+                    }
+                    
+                    // Ensure mesh is visible
+                    mesh.visible = true;
+                    
+                    // Check cache first (preloaded textures)
+                    let texture = null;
+                    if (this.talkingTextures[framePath]) {
+                        texture = this.talkingTextures[framePath];
+                    } else if (this.thinkingTextures[framePath]) {
+                        texture = this.thinkingTextures[framePath];
+                    }
+                    
+                    if (!texture) {
+                        console.warn(`⚠️ Frame texture not cached: ${framePath}`);
+                        return;
+                    }
+                    
+                    // Ensure plane geometry stays fixed at 1x1 (flat 2D surface)
+                    // Reset to 1x1 to ensure consistency - don't change geometry based on texture
+                    this.orangePlane.setAttribute('geometry', { width: 1, height: 1 });
+                    
+                    // Ensure texture mapping is correct - center and repeat
+                    texture.center.set(0.5, 0.5);
+                    texture.repeat.set(1, 1);
+                    texture.offset.set(0, 0);
+                    
+                    // Verify geometry stays at 1x1
+                    const geometry = mesh.geometry;
+                    if (geometry && (Math.abs(geometry.parameters.width - 1) > 0.01 || 
+                                     Math.abs(geometry.parameters.height - 1) > 0.01)) {
+                        console.warn(`⚠️ Plane geometry changed from 1x1 to ${geometry.parameters.width}x${geometry.parameters.height}, resetting`);
+                        // Force it back to 1x1
+                        this.orangePlane.setAttribute('geometry', { width: 1, height: 1 });
+                    }
+                    
+                    // Check if we need to recreate frameMaterial
+                    // This happens when we switched from image-based (smile) back to frame-based animation
+                    const needsNewMaterial = !this.frameMaterial || 
+                                            mesh.material !== this.frameMaterial ||
+                                            (this.frameMaterial && !this.frameMaterial.map);
+                    
+                    if (needsNewMaterial) {
+                        // Don't dispose materials - just replace them
+                        // Disposal can interfere with MindAR's internal state
+                        
+                        // Create fresh frameMaterial
+                        this.frameMaterial = new THREE.MeshBasicMaterial({
+                            map: texture,
+                            transparent: true,
+                            alphaTest: 0.1,
+                            opacity: 1.0,
+                            side: THREE.DoubleSide
+                        });
+                        mesh.material = this.frameMaterial;
+                    } else {
+                        // Just update the texture map - much more efficient!
+                        // All textures are preloaded and cached, so we never dispose them
+                        this.frameMaterial.map = texture;
+                        this.frameMaterial.needsUpdate = true;
+                    }
+                    
+                    // Force material update
+                    mesh.material.needsUpdate = true;
+                    
+                    // Ensure mesh is still visible (defensive check)
+                    if (!mesh.visible) {
+                        console.warn('⚠️ Mesh became invisible, re-enabling');
+                        mesh.visible = true;
+                    }
+                }
+                
+                showWinkConfirmation() {
+                    // Show wink image briefly to confirm advanced animations are loaded
+                    // This indicates that test buttons will use frame-based animations, not fallbacks
+                    console.log('😉 Showing wink - advanced animations are ready!');
+                    const winkImg = document.querySelector('img[id="talking-orange-wink"]');
+                    if (winkImg) {
+                        this.recreateMaterial(winkImg);
+                        // Return to smile after 1 second
+                        setTimeout(() => {
+                            const smileImg = document.querySelector('img[id="talking-orange"]');
+                            if (smileImg) {
+                                this.recreateMaterial(smileImg);
+                                console.log('😊 Returned to smile after wink confirmation');
+                            }
+                        }, 1000);
+                    } else {
+                        console.warn('⚠️ Wink image not found');
                     }
                 }
                 
@@ -259,22 +594,22 @@
                 }
                 
                 startTalkingAnimation() {
-                    if (this.isTalking) {
-                        console.log('⚠️ Animation already running');
-                        return;
+                    // Force stop any existing thinking animation first
+                    if (this.isThinking) {
+                        console.log('⚠️ Stopping existing thinking animation before starting talking');
+                        this.stopThinkingAnimation();
                     }
                     
-                    if (this.talkingStates.length === 0) {
-                        console.error('❌ No talking states available');
-                        return;
+                    // Clear any stale intervals
+                    if (this.talkingInterval) {
+                        clearInterval(this.talkingInterval);
+                        this.talkingInterval = null;
                     }
                     
+                    // Reset state flags
                     this.isTalking = true;
                     this.isIdle = false;
-                    this.currentTalkingState = 0;
-                    this.talkingDirection = 1; // Start opening mouth
-                    
-                    console.log(`🗣️ Starting talking animation with ${this.talkingStates.length} states`);
+                    this.isThinking = false; // Ensure thinking is false
                     
                     // Ensure image plane is visible
                     const imageMesh = this.orangePlane.getObject3D('mesh');
@@ -282,55 +617,159 @@
                         imageMesh.visible = true;
                     }
                     
-                    // Start with first talking state
-                    this.setToTalkingState(this.currentTalkingState);
-                    
-                    // Cycle through talking images forward then backward (opening/closing mouth)
-                    this.talkingInterval = setInterval(() => {
-                        // Check boundaries before moving
-                        if (this.currentTalkingState >= this.talkingStates.length - 1 && this.talkingDirection === 1) {
-                            // At max, reverse direction
-                            this.talkingDirection = -1; // Start closing
-                        } else if (this.currentTalkingState <= 0 && this.talkingDirection === -1) {
-                            // At min, reverse direction
-                            this.talkingDirection = 1; // Start opening
+                    // Use frame-based animation if available, otherwise fall back to image-based
+                    if (this.useFrameAnimations && this.talkingFrames.length > 0) {
+                        console.log(`🎬 Starting frame-based talking animation with ${this.talkingFrames.length} frames`);
+                        this.currentTalkingFrame = 0;
+                        
+                        // Start with first frame
+                        this.applyTextureFromFrame(this.talkingFrames[this.currentTalkingFrame]);
+                        
+                        // Loop forward through frames continuously
+                        // 145 frames in 6 seconds = ~41.4ms per frame
+                        const talkingFrameInterval = Math.round(6000 / this.talkingFrames.length);
+                        console.log(`⏱️  Talking animation: ${this.talkingFrames.length} frames, interval=${talkingFrameInterval}ms, target duration=6s`);
+                        
+                        let talkingStartTime = performance.now();
+                        let talkingFrameCount = 0;
+                        this.talkingInterval = setInterval(() => {
+                            // Move to next frame
+                            this.currentTalkingFrame++;
+                            
+                            // Check if we've reached the last frame
+                            if (this.currentTalkingFrame >= this.talkingFrames.length) {
+                                // Check if we're in test mode (should stop after one cycle)
+                                if (this.fallbackTestMode) {
+                                    console.log(`✅ Talking animation completed (reached frame ${this.talkingFrames.length - 1}) - test mode`);
+                                    this.fallbackTestMode = false;
+                                    this.stopTalkingAnimation();
+                                    return;
+                                }
+                                // Normal operation: loop continuously
+                                this.currentTalkingFrame = 0;
+                            }
+                            
+                            talkingFrameCount++;
+                            
+                            const elapsed = performance.now() - talkingStartTime;
+                            const expectedElapsed = talkingFrameCount * talkingFrameInterval;
+                            const timingDiff = (elapsed - expectedElapsed).toFixed(2);
+                            
+                            if (talkingFrameCount % 10 === 0) {
+                                console.log(`🗣️ Talking frame ${this.currentTalkingFrame} requested [elapsed: ${elapsed.toFixed(0)}ms, expected: ${expectedElapsed.toFixed(0)}ms, diff: ${timingDiff}ms]`);
+                            }
+                            
+                            this.applyTextureFromFrame(this.talkingFrames[this.currentTalkingFrame]);
+                        }, talkingFrameInterval); // 6 seconds total for full cycle
+                    } else {
+                        // Fallback to image-based animation
+                        if (this.talkingStates.length === 0) {
+                            console.error('❌ No talking states available');
+                            return;
                         }
                         
-                        // Move to next state based on direction
-                        this.currentTalkingState += this.talkingDirection;
+                        console.log(`🗣️ Starting image-based talking animation with ${this.talkingStates.length} states`);
+                        this.currentTalkingState = 0;
+                        this.talkingDirection = 1;
                         
+                        // Start with first talking state
                         this.setToTalkingState(this.currentTalkingState);
-                    }, 200); // Fast animation for mouth movement
+                        
+                        // Cycle through talking images forward then backward (opening/closing mouth)
+                        this.talkingInterval = setInterval(() => {
+                            // Check boundaries before moving
+                            if (this.currentTalkingState >= this.talkingStates.length - 1 && this.talkingDirection === 1) {
+                                this.talkingDirection = -1; // Start closing
+                            } else if (this.currentTalkingState <= 0 && this.talkingDirection === -1) {
+                                // Completed one full cycle (forward + backward)
+                                if (this.fallbackTestMode) {
+                                    console.log('✅ Fallback talking animation completed one cycle');
+                                    this.fallbackTestMode = false;
+                                    this.stopTalkingAnimation();
+                                    return;
+                                }
+                                // Normal operation: continue looping
+                                this.talkingDirection = 1; // Start opening again
+                            }
+                            
+                            // Move to next state based on direction
+                            this.currentTalkingState += this.talkingDirection;
+                            this.setToTalkingState(this.currentTalkingState);
+                        }, 100); // Fast animation for mouth movement
+                    }
                 }
                 
                 stopTalkingAnimation() {
                     if (!this.isTalking) {
                         console.log('⚠️ Animation not running');
+                        // Still reset test mode flag even if not running
+                        this.fallbackTestMode = false;
                         return;
                     }
                     
                     this.isTalking = false;
                     console.log('🔇 Stopping talking animation, returning to idle');
                     
-                    // Clear talking interval
+                    // Clear talking interval immediately
                     if (this.talkingInterval) {
                         clearInterval(this.talkingInterval);
                         this.talkingInterval = null;
                     }
                     
-                    // Return to idle state
+                    // Reset frame counters and test mode
+                    this.currentTalkingFrame = 0;
+                    this.fallbackTestMode = false;
+                    
+                    // Force return to idle state (smile) - clear any pending async texture loads first
+                    // Set a flag to prevent frame animations from overwriting the idle state
+                    const restoreIdleState = () => {
+                        console.log('🔄 Restoring idle state (smile)...');
+                        // Force apply smile immediately
+                        const img = document.querySelector(`img[id="${this.idleState.id.replace('#', '')}"]`);
+                        if (img) {
+                            this.recreateMaterial(img);
+                            // Ensure geometry stays 1x1
+                            this.orangePlane.setAttribute('geometry', { width: 1, height: 1 });
+                            console.log('✅ Smile image restored via recreateMaterial');
+                        } else {
+                            // Fallback: use src but reset geometry immediately
+                            this.orangePlane.setAttribute('src', this.idleState.id);
+                            setTimeout(() => {
+                                this.orangePlane.setAttribute('geometry', { width: 1, height: 1 });
+                            }, 10);
+                            console.log('✅ Smile image restored via setAttribute (geometry reset)');
+                        }
                     this.setToIdleState();
+                    };
+                    
+                    // Small delay to ensure frame animation interval is cleared
+                    setTimeout(restoreIdleState, 100);
                 }
                 
                 startThinkingAnimation() {
-                    if (this.isThinking) {
-                        console.log('⚠️ Thinking animation already running');
+                    // Guard: if already running and interval exists, don't start again
+                    if (this.isThinking && this.thinkingInterval) {
+                        console.log('⚠️ Thinking animation already running, skipping duplicate start');
                         return;
                     }
                     
-                    console.log('🤔 Starting thinking animation...');
+                    // Force stop any existing talking animation first
+                    if (this.isTalking) {
+                        console.log('⚠️ Stopping existing talking animation before starting thinking');
+                        this.stopTalkingAnimation();
+                    }
+                    
+                    // Clear any stale intervals - CRITICAL to prevent stacking
+                    if (this.thinkingInterval) {
+                        console.log('⚠️ Clearing existing thinking interval to prevent stacking');
+                        clearInterval(this.thinkingInterval);
+                        this.thinkingInterval = null;
+                    }
+                    
+                    // Reset state flags
                     this.isThinking = true;
                     this.isIdle = false;
+                    this.isTalking = false; // Ensure talking is false
                     
                     // Show image plane
                     const imageMesh = this.orangePlane.getObject3D('mesh');
@@ -338,26 +777,115 @@
                         imageMesh.visible = true;
                     }
                     
+                    // Use frame-based animation if available, otherwise fall back to image-based
+                    if (this.useFrameAnimations && this.thinkingFrames.length > 0) {
+                        console.log(`🎬 Starting frame-based thinking animation with ${this.thinkingFrames.length} frames`);
+                        this.currentThinkingFrame = 0;
+                        
+                        // Start with first frame
+                        this.applyTextureFromFrame(this.thinkingFrames[this.currentThinkingFrame]);
+                        
+                        // Loop forward through frames continuously
+                        // 145 frames in 3 seconds = ~20.7ms per frame
+                        const thinkingFrameInterval = Math.round(3000 / this.thinkingFrames.length);
+                        console.log(`⏱️  Thinking animation: ${this.thinkingFrames.length} frames, interval=${thinkingFrameInterval}ms, target duration=3s`);
+                        
+                        // Use closure variables that persist but reset on loop
+                        let thinkingFrameCount = 0;
+                        let lastLoopTime = performance.now();
+                        
+                        this.thinkingInterval = setInterval(() => {
+                            // Move to next frame
+                            this.currentThinkingFrame++;
+                            thinkingFrameCount++;
+                            
+                            // Check if we've reached the last frame
+                            if (this.currentThinkingFrame >= this.thinkingFrames.length) {
+                                // Check if we're in test mode (should stop after one cycle)
+                                if (this.fallbackTestMode) {
+                                    console.log(`✅ Thinking animation completed (reached frame ${this.thinkingFrames.length - 1}) - test mode`);
+                                    this.fallbackTestMode = false;
+                                    this.stopThinkingAnimation();
+                                    return;
+                                }
+                                // Normal operation: loop continuously - RESET timing to prevent acceleration
+                                this.currentThinkingFrame = 0;
+                                thinkingFrameCount = 0;
+                                lastLoopTime = performance.now();
+                                console.log('🔄 Thinking animation looped, reset timing');
+                            }
+                            
+                            // Apply the current frame
+                            this.applyTextureFromFrame(this.thinkingFrames[this.currentThinkingFrame]);
+                        }, thinkingFrameInterval);
+                    } else {
+                        // Fallback to image-based animation
+                        console.log('🤔 Starting image-based thinking animation...');
+                        this.currentThinkingState = 0;
+                    
                     // Cycle through thinking states
                     this.thinkingInterval = setInterval(() => {
                         this.setToThinkingState(this.currentThinkingState);
-                        this.currentThinkingState = (this.currentThinkingState + 1) % this.thinkingStates.length;
-                    }, 800); // Slower than talking animation
+                            this.currentThinkingState++;
+                            
+                            // Check if we've completed one full cycle
+                            if (this.currentThinkingState >= this.thinkingStates.length) {
+                                if (this.fallbackTestMode) {
+                                    console.log('✅ Fallback thinking animation completed one cycle');
+                                    this.fallbackTestMode = false;
+                                    this.stopThinkingAnimation();
+                                    return;
+                                }
+                                // Normal operation: loop continuously
+                                this.currentThinkingState = 0;
+                            }
+                        }, 100); // Fast animation, same speed as talking
+                    }
                 }
                 
                 stopThinkingAnimation() {
                     if (!this.isThinking) {
                         console.log('⚠️ No thinking animation running');
+                        // Still reset test mode flag even if not running
+                        this.fallbackTestMode = false;
                         return;
                     }
                     
-                    console.log('🛑 Stopping thinking animation...');
                     this.isThinking = false;
+                    console.log('🛑 Stopping thinking animation, returning to idle');
                     
+                    // Clear thinking interval immediately
                     if (this.thinkingInterval) {
                         clearInterval(this.thinkingInterval);
                         this.thinkingInterval = null;
                     }
+                    
+                    // Reset frame counters and test mode
+                    this.currentThinkingFrame = 0;
+                    this.fallbackTestMode = false;
+                    
+                    // Force return to idle state (smile) - clear any pending async texture loads first
+                    const restoreIdleState = () => {
+                        console.log('🔄 Restoring idle state (smile)...');
+                        const img = document.querySelector(`img[id="${this.idleState.id.replace('#', '')}"]`);
+                        if (img) {
+                            this.recreateMaterial(img);
+                            // Ensure geometry stays 1x1
+                            this.orangePlane.setAttribute('geometry', { width: 1, height: 1 });
+                            console.log('✅ Smile image restored via recreateMaterial');
+                        } else {
+                            // Fallback: use src but reset geometry immediately
+                            this.orangePlane.setAttribute('src', this.idleState.id);
+                            setTimeout(() => {
+                                this.orangePlane.setAttribute('geometry', { width: 1, height: 1 });
+                            }, 10);
+                            console.log('✅ Smile image restored via setAttribute (geometry reset)');
+                        }
+                    this.setToIdleState();
+                    };
+                    
+                    // Small delay to ensure frame animation interval is cleared
+                    setTimeout(restoreIdleState, 100);
                     
                     console.log('✅ Thinking animation stopped');
                 }
@@ -379,21 +907,402 @@
             // Initialize the animation module
             const animationModule = new TalkingAnimationModule(orangePlane);
             
-            // Expose functions for external control
+            // ========================================
+            // THINKING ANIMATION CONTROLLER
+            // Manages both visual animation and audio with different modes
+            // ========================================
+            class ThinkingAnimationController {
+                constructor(animationModule, audioUrl) {
+                    this.animationModule = animationModule;
+                    this.audioUrl = audioUrl;
+                    this.audio = null;
+                    this.isPlaying = false;
+                    this.loopMode = false; // false = single play, true = loop continuously
+                    this.lastAnimationFrame = -1; // Track animation frame to detect loops
+                    this.frameCheckInterval = null; // Interval to check for animation loops
+                }
+                
+                // Start thinking animation
+                start(options = {}) {
+                    const { loop = false, playAudio = true } = options;
+                    this.loopMode = loop;
+                    
+                    console.log(`🤔 Starting thinking animation (loop: ${loop}, audio: ${playAudio})`);
+                    
+                    // Set test mode based on loop mode
+                    this.animationModule.fallbackTestMode = !loop;
+                    
+                    // Initialize frame tracking
+                    this.lastAnimationFrame = -1;
+                    
+                    // Start frame monitoring immediately if in loop mode with audio
+                    // This will detect when animation loops and restart audio accordingly
+                    if (loop && playAudio) {
+                        this.startFrameMonitoring();
+                    }
+                    
+                    // Start visual animation immediately
+                    this.animationModule.startThinkingAnimation();
+                    
+                    // Start audio if requested (with 1 second delay)
+                    if (playAudio) {
+                        setTimeout(() => {
+                            this.playAudioOnce(); // Play once per cycle
+                            // Initialize frame tracking after audio starts
+                            this.lastAnimationFrame = this.animationModule.currentThinkingFrame || 0;
+                        }, 1000); // 1 second delay
+                    }
+                }
+                
+                // Monitor animation frames to detect when animation loops (resets to 0)
+                startFrameMonitoring() {
+                    // Clear existing interval
+                    if (this.frameCheckInterval) {
+                        clearInterval(this.frameCheckInterval);
+                    }
+                    
+                    console.log('👁️ Starting frame monitoring to detect animation loops');
+                    
+                    // Check every 50ms for frame resets (indicates animation looped)
+                    this.frameCheckInterval = setInterval(() => {
+                        if (!this.animationModule.isThinking) {
+                            // Animation stopped, stop monitoring
+                            this.stopFrameMonitoring();
+                            return;
+                        }
+                        
+                        const currentFrame = this.animationModule.currentThinkingFrame || 0;
+                        
+                        // Only check for loop if we have a valid last frame
+                        if (this.lastAnimationFrame >= 0) {
+                            // Detect when animation loops: frame goes from near end (>= 140) back to start (0-10)
+                            // This indicates the animation completed one cycle and restarted
+                            if (currentFrame <= 10 && this.lastAnimationFrame >= 140 && this.loopMode && !this.isPlaying) {
+                                console.log(`🔄 Animation looped detected (frame ${this.lastAnimationFrame} -> ${currentFrame}), restarting audio`);
+                                this.playAudioOnce();
+                            }
+                        }
+                        
+                        // Update last frame tracker (only update if we're progressing forward or looping)
+                        if (currentFrame > this.lastAnimationFrame || (currentFrame <= 10 && this.lastAnimationFrame >= 140)) {
+                            this.lastAnimationFrame = currentFrame;
+                        }
+                    }, 50); // Check more frequently for better detection
+                }
+                
+                // Stop frame monitoring
+                stopFrameMonitoring() {
+                    if (this.frameCheckInterval) {
+                        clearInterval(this.frameCheckInterval);
+                        this.frameCheckInterval = null;
+                    }
+                }
+                
+                // Stop thinking animation
+                stop() {
+                    console.log('🛑 Stopping thinking animation and audio...');
+                    
+                    // Clear frame check interval
+                    if (this.frameCheckInterval) {
+                        clearInterval(this.frameCheckInterval);
+                        this.frameCheckInterval = null;
+                    }
+                    
+                    this.animationModule.stopThinkingAnimation();
+                    this.stopAudio();
+                    this.lastAnimationFrame = -1;
+                }
+                
+                // Play audio once (not looping forever)
+                playAudioOnce() {
+                    // Stop existing audio if any
+                    if (this.audio) {
+                        this.audio.pause();
+                        this.audio.currentTime = 0;
+                        this.audio = null;
+                    }
+                    
+                    if (!this.audioUrl) {
+                        console.warn('⚠️ No thinking audio URL configured');
+                        return;
+                    }
+                    
+                    console.log('🎵 Starting thinking audio (one play per animation cycle)...');
+                    this.audio = new Audio(this.audioUrl);
+                    this.audio.loop = false; // Don't loop forever
+                    
+                    // When audio ends, just mark it as done - don't restart automatically
+                    this.audio.onended = () => {
+                        console.log('🔚 Thinking audio finished playing');
+                        this.audio = null;
+                        this.isPlaying = false;
+                        // Don't restart here - wait for animation loop detection
+                    };
+                    
+                    // Log when audio starts
+                    this.audio.onplay = () => {
+                        console.log('▶️ Thinking audio started playing');
+                        this.isPlaying = true;
+                    };
+                    
+                    // Handle errors
+                    this.audio.onerror = (e) => {
+                        console.warn('⚠️ Thinking audio error:', e);
+                        this.audio = null;
+                        this.isPlaying = false;
+                    };
+                    
+                    // Start playing
+                    const playPromise = this.audio.play();
+                    if (playPromise !== undefined) {
+                        playPromise
+                            .then(() => {
+                                console.log('✅ Thinking audio playback started');
+                            })
+                            .catch(err => {
+                                console.warn('⚠️ Failed to play thinking audio:', err);
+                                this.audio = null;
+                                this.isPlaying = false;
+                            });
+                    }
+                }
+                
+                // Check if animation has looped (frame reset to 0) and restart audio if needed
+                checkAnimationLoop() {
+                    if (!this.loopMode || !this.animationModule.isThinking) {
+                        return;
+                    }
+                    
+                    const currentFrame = this.animationModule.currentThinkingFrame;
+                    
+                    // Detect animation loop: frame went from last frame (or near end) back to 0
+                    // or frame is 0 and we were tracking a higher frame before
+                    if (currentFrame === 0 && this.lastAnimationFrame > 100) {
+                        // Animation looped! Restart audio
+                        console.log('🔄 Animation looped, restarting thinking audio');
+                        this.playAudioOnce();
+                    }
+                    
+                    // Update last frame tracker
+                    this.lastAnimationFrame = currentFrame;
+                }
+                
+                // Stop audio
+                stopAudio() {
+                    if (this.audio) {
+                        console.log('🔇 Stopping thinking audio...');
+                        this.audio.pause();
+                        this.audio.currentTime = 0;
+                        this.audio = null;
+                        this.isPlaying = false;
+                        console.log('✅ Thinking audio stopped');
+                    }
+                }
+            }
+            
+            // ========================================
+            // TALKING ANIMATION CONTROLLER
+            // Manages visual animation with different modes
+            // ========================================
+            class TalkingAnimationController {
+                constructor(animationModule, introAudioUrl = null) {
+                    this.animationModule = animationModule;
+                    this.introAudioUrl = introAudioUrl;
+                    this.introAudio = null;
+                }
+                
+                // Start talking animation
+                start(options = {}) {
+                    const { loop = false, playIntro = false } = options;
+                    // Set test mode to stop after one cycle if not looping
+                    this.animationModule.fallbackTestMode = !loop;
+                    
+                    console.log(`🗣️ Starting talking animation (loop: ${loop}, intro: ${playIntro})`);
+                    
+                    // If intro audio is requested, play it first then start animation
+                    if (playIntro && this.introAudioUrl) {
+                        this.playIntroAudio();
+                    } else {
+                        // Start visual animation immediately
+                        this.animationModule.startTalkingAnimation();
+                    }
+                }
+                
+                // Play intro audio
+                playIntroAudio() {
+                    if (!this.introAudioUrl) {
+                        console.warn('⚠️ No intro audio URL configured');
+                        // Fallback to starting animation without intro
+                        this.animationModule.startTalkingAnimation();
+                        return;
+                    }
+                    
+                    console.log('🎵 Playing intro audio...');
+                    
+                    // Stop any existing intro audio
+                    if (this.introAudio) {
+                        this.introAudio.pause();
+                        this.introAudio = null;
+                    }
+                    
+                    this.introAudio = new Audio(this.introAudioUrl);
+                    
+                    // When intro audio starts, start the animation
+                    this.introAudio.onplay = () => {
+                        console.log('▶️ Intro audio started, starting talking animation');
+                        this.animationModule.startTalkingAnimation();
+                    };
+                    
+                    // When intro audio ends, animation continues
+                    this.introAudio.onended = () => {
+                        console.log('🔚 Intro audio finished');
+                        this.introAudio = null;
+                    };
+                    
+                    // Handle errors
+                    this.introAudio.onerror = (e) => {
+                        console.warn('⚠️ Intro audio error:', e);
+                        this.introAudio = null;
+                        // Fallback to starting animation without intro
+                        this.animationModule.startTalkingAnimation();
+                    };
+                    
+                    // Start playing
+                    const playPromise = this.introAudio.play();
+                    if (playPromise !== undefined) {
+                        playPromise
+                            .then(() => {
+                                console.log('✅ Intro audio playback started');
+                            })
+                            .catch(err => {
+                                console.warn('⚠️ Failed to play intro audio:', err);
+                                this.introAudio = null;
+                                // Fallback to starting animation without intro
+                                this.animationModule.startTalkingAnimation();
+                            });
+                    }
+                }
+                
+                // Stop talking animation
+                stop() {
+                    console.log('🛑 Stopping talking animation...');
+                    
+                    // Stop intro audio if playing
+                    if (this.introAudio) {
+                        this.introAudio.pause();
+                        this.introAudio.currentTime = 0;
+                        this.introAudio = null;
+                    }
+                    
+                    this.animationModule.stopTalkingAnimation();
+                }
+            }
+            
+            // Initialize animation controllers
+            const thinkingController = new ThinkingAnimationController(
+                animationModule,
+                './media/videos/talking-orange-thinking-animation/thinking-hmm.mp3'
+            );
+            const talkingController = new TalkingAnimationController(
+                animationModule,
+                './media/videos/talking-orange-talking-animation/talking-intro.mp3'
+            );
+            
+            // Legacy audio functions (deprecated - use controllers instead)
+            let thinkingAudio = null;
+            const thinkingAudioUrl = './media/videos/talking-orange-thinking-animation/thinking-hmm.mp3';
+            
+            // Play thinking audio in a loop (using pre-generated static file)
+            function playThinkingAudioLoop() {
+                console.log('🎵 Attempting to start thinking audio from:', thinkingAudioUrl);
+                
+                // Stop existing audio if any
+                if (thinkingAudio) {
+                    console.log('🛑 Stopping existing thinking audio');
+                    thinkingAudio.pause();
+                    thinkingAudio = null;
+                }
+                
+                thinkingAudio = new Audio(thinkingAudioUrl);
+                
+                // Set up event handlers before playing
+                thinkingAudio.loop = true;
+                
+                // Log when audio is loaded
+                thinkingAudio.onloadeddata = function() {
+                    console.log('✅ Thinking audio loaded and ready to play');
+                };
+                
+                // Log when audio starts playing
+                thinkingAudio.onplay = function() {
+                    console.log('▶️ Thinking audio started playing');
+                };
+                
+                // Restart on end if loop didn't work (some browsers don't support loop property well)
+                thinkingAudio.onended = function() {
+                    console.log('🔄 Thinking audio ended, restarting...');
+                    if (animationModule.isThinking) {
+                        thinkingAudio.currentTime = 0;
+                        thinkingAudio.play().catch(err => {
+                            console.warn('⚠️ Thinking audio play error on restart:', err);
+                        });
+                    }
+                };
+                
+                // Handle errors gracefully (file might not exist, that's okay)
+                thinkingAudio.onerror = function(e) {
+                    console.warn('⚠️ Thinking audio error:', e);
+                    console.warn('   File may not exist. Run: python3 backend/gen/generate_thinking_audio.py');
+                    thinkingAudio = null;
+                };
+                
+                // Start playing with promise to catch autoplay issues
+                const playPromise = thinkingAudio.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            console.log('✅ Thinking audio playback started successfully');
+                        })
+                        .catch(err => {
+                            console.warn('⚠️ Failed to play thinking audio (autoplay may be blocked):', err);
+                            console.warn('   Audio will play when user interacts with the page');
+                            // Not critical - animation will continue without audio
+                        });
+                }
+                
+                console.log('🔊 Thinking audio setup complete');
+            }
+            
+            // Stop thinking audio
+            function stopThinkingAudio() {
+                if (thinkingAudio) {
+                    console.log('🔇 Stopping thinking audio...');
+                    thinkingAudio.pause();
+                    thinkingAudio.currentTime = 0;
+                    thinkingAudio = null;
+                    console.log('✅ Thinking audio stopped');
+                } else {
+                    console.log('ℹ️ No thinking audio to stop');
+                }
+            }
+            
+            // Expose functions for external control (conversation flow - loops)
             function startTalkingAnimation() {
-                animationModule.startTalkingAnimation();
+                talkingController.start({ loop: true });
             }
             
             function stopTalkingAnimation() {
-                animationModule.stopTalkingAnimation();
+                talkingController.stop();
             }
             
             function startThinkingAnimation() {
-                animationModule.startThinkingAnimation();
+                // Conversation mode: loop animation, play audio once per cycle
+                thinkingController.start({ loop: true, playAudio: true });
             }
             
             function stopThinkingAnimation() {
-                animationModule.stopThinkingAnimation();
+                thinkingController.stop();
             }
             
             // Voice recording and processing system
@@ -650,67 +1559,209 @@
             window.askQuestion = askQuestion;
             window.animationModule = animationModule; // Expose for console debugging
             
+            // Test animation functions (single play mode)
+            window.testThinkingAnimation = function() {
+                console.log('🧪 Testing thinking animation (one cycle)...');
+                // Stop any existing animations
+                stopTalkingAnimation();
+                stopThinkingAnimation();
+                // Small delay to ensure previous animation is fully stopped
+                setTimeout(() => {
+                    // Reset state before starting
+                    if (window.animationModule) {
+                        window.animationModule.currentThinkingFrame = 0;
+                        window.animationModule.currentThinkingState = 0;
+                        window.animationModule.isThinking = false;
+                    }
+                    // Test mode: single play (no loop), with audio
+                    thinkingController.start({ loop: false, playAudio: true });
+                }, 150);
+            };
+            
+            window.testTalkingAnimation = function() {
+                console.log('🧪 Testing talking animation (one cycle with intro)...');
+                // Stop any existing animations
+                stopTalkingAnimation();
+                stopThinkingAnimation();
+                // Small delay to ensure previous animation is fully stopped
+                setTimeout(() => {
+                    // Reset state before starting
+                    if (window.animationModule) {
+                        window.animationModule.currentTalkingFrame = 0;
+                        window.animationModule.currentTalkingState = 0;
+                        window.animationModule.talkingDirection = 1;
+                        window.animationModule.isTalking = false;
+                    }
+                    // Test mode: single play (no loop) with intro audio
+                    talkingController.start({ loop: false, playIntro: true });
+                }, 150);
+            };
+            
             if (marker) {
-                // Add smoothing variables
+                // Add smoothing variables - simple direct smoothing (no averaging needed)
                 let lastPosition = { x: 0, y: 0, z: 0 };
-                let smoothingFactor = 0.05; // Much more aggressive smoothing
-                let positionHistory = [];
-                const maxHistoryLength = 5;
+                let lastRotation = { x: 0, y: 0, z: 0 };
+                let smoothingFactor = 0.2; // Direct smoothing factor (lower = more stable, less jitter)
+                let rotationSmoothing = 0.15; // More aggressive rotation smoothing
+                let trackingStability = 0; // Track how stable tracking is (0-1)
+                let consecutiveFrames = 0; // Count consecutive successful tracking frames
+                
+                // Hysteresis: Keep entity visible for longer time after target lost for better stability
+                let targetLostTimeout = null;
+                let isTargetVisible = false;
+                const TARGET_LOST_DELAY = 500; // Keep visible for 500ms after losing target (increased for stability)
+                const MIN_STABLE_FRAMES = 10; // Minimum frames before considering tracking stable
                 
                 marker.addEventListener('targetFound', function() {
-                    console.log('🎯 Target found! Red cube and blue sphere should be visible');
-                });
-                marker.addEventListener('targetLost', function() {
-                    console.log('❌ Target lost');
+                    consecutiveFrames++;
+                    
+                    // Increase smoothing as tracking becomes more stable
+                    if (consecutiveFrames > MIN_STABLE_FRAMES) {
+                        trackingStability = Math.min(1.0, trackingStability + 0.05);
+                        // Gradually reduce smoothing factor for more responsive tracking once stable
+                        smoothingFactor = Math.max(0.15, 0.3 - (trackingStability * 0.1));
+                        rotationSmoothing = Math.max(0.1, 0.25 - (trackingStability * 0.1));
+                    }
+                    
+                    if (consecutiveFrames % 30 === 0) {
+                        console.log(`🎯 Target found! (stable: ${(trackingStability * 100).toFixed(0)}%, frames: ${consecutiveFrames})`);
+                    }
+                    
+                    isTargetVisible = true;
+                    
+                    // Clear any pending hide timeout
+                    if (targetLostTimeout) {
+                        clearTimeout(targetLostTimeout);
+                        targetLostTimeout = null;
+                    }
+                    
+                    // Ensure all child entities are visible
+                    const markerMesh = marker.getObject3D('mesh');
+                    if (markerMesh) {
+                        markerMesh.visible = true;
+                        markerMesh.traverse((child) => {
+                            if (child.isMesh) {
+                                child.visible = true;
+                            }
+                        });
+                    }
                 });
                 
-                // Add smoothing to marker position
+                marker.addEventListener('targetLost', function() {
+                    // Reset stability tracking on loss
+                    if (consecutiveFrames < MIN_STABLE_FRAMES) {
+                        trackingStability = 0;
+                    } else {
+                        // Decay stability slowly on loss
+                        trackingStability = Math.max(0, trackingStability - 0.1);
+                    }
+                    consecutiveFrames = 0;
+                    
+                    console.log(`❌ Target lost (stability: ${(trackingStability * 100).toFixed(0)}%, will hide after ${TARGET_LOST_DELAY}ms if not found)`);
+                    
+                    // Schedule hide after delay (hysteresis)
+                    if (targetLostTimeout) {
+                        clearTimeout(targetLostTimeout);
+                    }
+                    
+                    targetLostTimeout = setTimeout(() => {
+                        if (!isTargetVisible) {
+                            console.log('👋 Hiding entity after tracking loss');
+                            const markerMesh = marker.getObject3D('mesh');
+                            if (markerMesh) {
+                                markerMesh.visible = false;
+                            }
+                        }
+                    }, TARGET_LOST_DELAY);
+                    
+                    isTargetVisible = false;
+                });
+                
+                // Add smoothing to marker position and rotation
+                // Simple direct smoothing: smoothly interpolate from last position to current position
                 marker.addEventListener('componentchanged', function(event) {
                     if (event.detail.name === 'position') {
                         const currentPos = marker.getAttribute('position');
                         if (currentPos) {
-                            // Add to position history
-                            positionHistory.push({
+                            const current = {
                                 x: parseFloat(currentPos.x),
                                 y: parseFloat(currentPos.y),
                                 z: parseFloat(currentPos.z)
-                            });
-                            
-                            // Keep only recent positions
-                            if (positionHistory.length > maxHistoryLength) {
-                                positionHistory.shift();
-                            }
-                            
-                            // Calculate average position
-                            const avgPos = {
-                                x: positionHistory.reduce((sum, pos) => sum + pos.x, 0) / positionHistory.length,
-                                y: positionHistory.reduce((sum, pos) => sum + pos.y, 0) / positionHistory.length,
-                                z: positionHistory.reduce((sum, pos) => sum + pos.z, 0) / positionHistory.length
                             };
                             
-                            // Apply additional smoothing
+                            // Initialize lastPosition on first update
+                            if (lastPosition.x === 0 && lastPosition.y === 0 && lastPosition.z === 0) {
+                                lastPosition = { ...current };
+                            }
+                            
+                            // Direct smoothing: interpolate between last smoothed position and current raw position
+                            // Use adaptive smoothing - more aggressive when unstable, less when stable
+                            const adaptiveSmoothing = isTargetVisible && consecutiveFrames > MIN_STABLE_FRAMES 
+                                ? smoothingFactor 
+                                : smoothingFactor * 1.5; // More smoothing when unstable (startup)
+                            
                             const smoothedPos = {
-                                x: lastPosition.x + (avgPos.x - lastPosition.x) * smoothingFactor,
-                                y: lastPosition.y + (avgPos.y - lastPosition.y) * smoothingFactor,
-                                z: lastPosition.z + (avgPos.z - lastPosition.z) * smoothingFactor
+                                x: lastPosition.x + (current.x - lastPosition.x) * adaptiveSmoothing,
+                                y: lastPosition.y + (current.y - lastPosition.y) * adaptiveSmoothing,
+                                z: lastPosition.z + (current.z - lastPosition.z) * adaptiveSmoothing
                             };
                             
                             lastPosition = smoothedPos;
                             marker.setAttribute('position', `${smoothedPos.x} ${smoothedPos.y} ${smoothedPos.z}`);
                         }
+                    } else if (event.detail.name === 'rotation') {
+                        const currentRot = marker.getAttribute('rotation');
+                        if (currentRot) {
+                            const current = {
+                                x: parseFloat(currentRot.x),
+                                y: parseFloat(currentRot.y),
+                                z: parseFloat(currentRot.z)
+                            };
+                            
+                            // Initialize lastRotation on first update
+                            if (lastRotation.x === 0 && lastRotation.y === 0 && lastRotation.z === 0) {
+                                lastRotation = { ...current };
+                            }
+                            
+                            // Direct rotation smoothing with adaptive factor
+                            const adaptiveRotationSmoothing = isTargetVisible && consecutiveFrames > MIN_STABLE_FRAMES 
+                                ? rotationSmoothing 
+                                : rotationSmoothing * 1.5; // More smoothing when unstable (startup)
+                            
+                            const smoothedRot = {
+                                x: lastRotation.x + (current.x - lastRotation.x) * adaptiveRotationSmoothing,
+                                y: lastRotation.y + (current.y - lastRotation.y) * adaptiveRotationSmoothing,
+                                z: lastRotation.z + (current.z - lastRotation.z) * adaptiveRotationSmoothing
+                            };
+                            
+                            lastRotation = smoothedRot;
+                            marker.setAttribute('rotation', `${smoothedRot.x} ${smoothedRot.y} ${smoothedRot.z}`);
+                        }
                     }
                 });
             }
             
-            // Check for MindAR system
-            setTimeout(() => {
+            // Check for MindAR system (check immediately and periodically if not ready)
+            const checkMindAR = () => {
                 if (scene && scene.systems && scene.systems['mindar-image-system']) {
                     console.log('✅ MindAR system found:', scene.systems['mindar-image-system']);
-                } else {
-                    console.log('❌ MindAR system not found');
-                    console.log('🔍 Available systems:', scene.systems ? Object.keys(scene.systems) : 'No systems');
+                    return true;
                 }
-            }, 3000);
+                return false;
+            };
+            
+            // Check immediately first
+            if (!checkMindAR()) {
+                // If not ready, check periodically (but don't delay page load)
+                const checkInterval = setInterval(() => {
+                    if (checkMindAR()) {
+                        clearInterval(checkInterval);
+                    }
+                }, 100); // Check every 100ms instead of waiting 3 seconds
+                
+                // Stop checking after 5 seconds max
+                setTimeout(() => clearInterval(checkInterval), 5000);
+            }
         });
     </script>
 </body>
