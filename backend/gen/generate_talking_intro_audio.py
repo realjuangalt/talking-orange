@@ -20,16 +20,21 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).parent))
     from text_to_voice import synthesize_speech_sync
 
-def generate_intro_audio():
-    """Generate and save intro audio file."""
+def generate_intro_audio(language='en'):
+    """Generate and save intro audio file for specified language."""
     
-    # Generate intro text
-    text = "Hello, I'm Satoshka, a talking orange. I really like bitcoin and I know way too much about it. Would you like me to tell you a joke about bitcoin?"
+    # Generate intro text based on language
+    if language == 'es':
+        text = "Hola, soy Satoshka, una naranja parlante. Me gusta mucho bitcoin y sé demasiado sobre él. ¿Te gustaría que te cuente un chiste sobre bitcoin?"
+        output_filename = 'talking-intro-es.mp3'
+    else:
+        text = "Hello, I'm Satoshka, a talking orange. I really like bitcoin and I know way too much about it. Would you like me to tell you a joke about bitcoin?"
+        output_filename = 'talking-intro.mp3'
+    
     voice = "default"
-    language = "en"
     engine = "auto"
     
-    print(f"🎤 Generating intro audio for: '{text}'")
+    print(f"🎤 Generating intro audio ({language.upper()}) for: '{text}'")
     print(f"   Voice: {voice}, Language: {language}, Engine: {engine}")
     
     try:
@@ -58,7 +63,7 @@ def generate_intro_audio():
         repo_root = Path(__file__).parent.parent.parent
         output_dir = repo_root / 'frontend' / 'media' / 'videos' / 'talking-orange-talking-animation'
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_file = output_dir / 'talking-intro.mp3'
+        output_file = output_dir / output_filename
         
         # Save audio file
         print(f"💾 Saving audio to: {output_file}")
@@ -66,15 +71,15 @@ def generate_intro_audio():
             f.write(audio_data)
         
         file_size = output_file.stat().st_size
-        print(f"✅ Successfully saved intro audio!")
+        print(f"✅ Successfully saved intro audio ({language.upper()})!")
         print(f"   File: {output_file}")
         print(f"   Size: {file_size} bytes")
-        print(f"   Accessible at: ./media/videos/talking-orange-talking-animation/talking-intro.mp3")
+        print(f"   Accessible at: ./media/videos/talking-orange-talking-animation/{output_filename}")
         
         return True
         
     except Exception as e:
-        print(f"❌ Error generating intro audio: {e}")
+        print(f"❌ Error generating intro audio ({language.upper()}): {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -85,11 +90,20 @@ if __name__ == "__main__":
     print("=" * 60)
     print()
     
-    success = generate_intro_audio()
+    # Generate both English and Spanish versions
+    success_en = generate_intro_audio('en')
+    print()
+    success_es = generate_intro_audio('es')
     
     print()
-    if success:
-        print("✨ All done! The intro audio file is ready.")
+    if success_en and success_es:
+        print("✨ All done! Both intro audio files (EN and ES) are ready.")
+    elif success_en:
+        print("⚠️  English audio generated, but Spanish audio failed.")
+        sys.exit(1)
+    elif success_es:
+        print("⚠️  Spanish audio generated, but English audio failed.")
+        sys.exit(1)
     else:
         print("⚠️  Failed to generate intro audio. Check errors above.")
         sys.exit(1)

@@ -107,7 +107,7 @@ class TalkingOrangeVoiceSystem:
             logger.info(f"Transcribed text: {user_text}")
             
             # Generate Bitcoin response
-            response_text = self._generate_bitcoin_response_sync(user_text)
+            response_text = self._generate_bitcoin_response_sync(user_text, language)
             logger.info(f"Generated response: {response_text[:100]}...")
             
             # Synthesize speech
@@ -137,7 +137,7 @@ class TalkingOrangeVoiceSystem:
                 "tts_voice": "error"
             }
     
-    def _generate_bitcoin_response_sync(self, user_input: str) -> str:
+    def _generate_bitcoin_response_sync(self, user_input: str, language: str = "en") -> str:
         """Synchronous Bitcoin response generation using real LLM."""
         try:
             # Use the text generator for real LLM response
@@ -146,8 +146,14 @@ class TalkingOrangeVoiceSystem:
             except ImportError:
                 from text_generator import TextGenerator
             
-            # Load Bitcoin evangelism prompt from file
-            prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', 'bitcoin_evangelism.txt')
+            # Load Bitcoin evangelism prompt from file (language-specific)
+            prompt_filename = f"bitcoin_evangelism_{language}.txt" if language != 'en' else "bitcoin_evangelism.txt"
+            prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', prompt_filename)
+            
+            # Fallback to English if language-specific prompt doesn't exist
+            if not os.path.exists(prompt_path) and language != 'en':
+                logger.warning(f"Language-specific prompt not found at {prompt_path}, falling back to English")
+                prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', 'bitcoin_evangelism.txt')
             
             if os.path.exists(prompt_path):
                 with open(prompt_path, 'r', encoding='utf-8') as f:
@@ -226,7 +232,7 @@ class TalkingOrangeVoiceSystem:
             logger.info(f"Transcription: {transcription}")
             
             # Step 2: Generate Bitcoin response using real LLM
-            response_text = await self._generate_bitcoin_response(transcription)
+            response_text = await self._generate_bitcoin_response(transcription, language)
             logger.info(f"Response: {response_text}")
             
             # Step 3: Synthesize response audio
@@ -278,14 +284,21 @@ class TalkingOrangeVoiceSystem:
             logger.error(f"TTS synthesis failed: {e}")
             raise Exception(f"TTS synthesis error: {str(e)}")
     
-    async def _generate_bitcoin_response(self, user_input: str) -> str:
+    async def _generate_bitcoin_response(self, user_input: str, language: str = "en") -> str:
         """
         Generate Bitcoin evangelism response using real LLM API.
         Uses Venice AI API with Bitcoin evangelism prompt.
         """
         try:
-            # Load Bitcoin evangelism prompt
-            prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', 'bitcoin_evangelism.txt')
+            # Load Bitcoin evangelism prompt (language-specific)
+            prompt_filename = f"bitcoin_evangelism_{language}.txt" if language != 'en' else "bitcoin_evangelism.txt"
+            prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', prompt_filename)
+            
+            # Fallback to English if language-specific prompt doesn't exist
+            if not os.path.exists(prompt_path) and language != 'en':
+                logger.warning(f"Language-specific prompt not found at {prompt_path}, falling back to English")
+                prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', 'bitcoin_evangelism.txt')
+            
             system_prompt = ""
             
             if os.path.exists(prompt_path):

@@ -6,10 +6,13 @@ Ensures generated content conforms to expected data structures.
 
 import json
 import os
+import logging
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 import jsonschema
 from jsonschema import validate, ValidationError
+
+logger = logging.getLogger(__name__)
 
 class SchemaLoader:
     """Loads and validates JSON schemas from the schemas directory."""
@@ -27,8 +30,10 @@ class SchemaLoader:
         self.schemas_dir = Path(schemas_dir)
         self._cache = {}
         
+        # Create schemas directory if it doesn't exist (optional, only needed if schemas are used)
         if not self.schemas_dir.exists():
-            raise FileNotFoundError(f"Schemas directory not found: {self.schemas_dir}")
+            self.schemas_dir.mkdir(parents=True, exist_ok=True)
+            logger.warning(f"Schemas directory created (empty): {self.schemas_dir}. Add schema .json files if needed.")
     
     def load_schema(self, filename: str) -> Dict[str, Any]:
         """

@@ -1,10 +1,23 @@
 #!/bin/bash
 
-# Talking Orange AR Project - Installation Script
-# This script installs all required dependencies for local development
+# Talking Orange AR Project - MINIMAL Server Installation Script
+# This script installs ONLY runtime dependencies needed for production server
+# 
+# REMOVED (not needed for runtime):
+# - Node.js/npm: Frontend uses pre-bundled libraries (aframe.min.js, mindar)
+# - OpenCV: Only needed for pre-processing videos locally (extract_frames, etc.)
+# - Blender: Not used in runtime
+# - ImageMagick: Not used in code
+# - portaudio/pyaudio: Browser uses MediaRecorder API instead
+# - Multiple TTS engines: Only install what's actually used (espeak, festival, pico)
+#
+# Video processing scripts (extract_video_frames.py, remove_green_from_frames.py, 
+# resize_animation_frames.py) should be run locally BEFORE deploying to server.
 
-echo "🍊 Talking Orange AR Project - Installation Script"
-echo "=================================================="
+echo "🍊 Talking Orange AR Project - Minimal Server Installation"
+echo "========================================================"
+echo "📋 Installing ONLY runtime dependencies (minimal resource footprint)"
+echo ""
 
 # Check if running on Linux
 if [[ "$OSTYPE" != "linux-gnu"* ]]; then
@@ -16,8 +29,8 @@ fi
 echo "📦 Updating package list..."
 sudo apt update
 
-# Install system dependencies
-echo "🔧 Installing system dependencies..."
+# Install MINIMAL system dependencies for runtime
+echo "🔧 Installing core system dependencies..."
 sudo apt install -y \
     curl \
     wget \
@@ -26,39 +39,96 @@ sudo apt install -y \
     python3 \
     python3-pip \
     python3-venv \
+    python3-dev \
     sqlite3 \
-    imagemagick \
-    libmagick++-dev \
     ffmpeg \
-    libasound2-dev \
     nginx
 
-# Install Node.js (LTS version)
-echo "📦 Installing Node.js..."
-if ! command -v node &> /dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
-    sudo apt-get install -y nodejs
+# Audio processing dependencies (for TTS and audio conversion)
+echo "🔊 Installing audio processing dependencies..."
+sudo apt install -y \
+    libsndfile1-dev \
+    espeak \
+    festival \
+    libttspico-utils
+
+# OpenSSL and security libraries (required for building Python packages like torch)
+echo "🔒 Installing security libraries..."
+sudo apt install -y \
+    libssl-dev \
+    libffi-dev
+
+# Create Python virtual environment
+echo "🐍 Setting up Python virtual environment..."
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+    echo "✅ Created Python virtual environment"
 else
-    echo "✅ Node.js already installed"
+    echo "✅ Python virtual environment already exists"
 fi
 
-# Install Blender (via snap)
-echo "🎨 Installing Blender..."
-if ! command -v blender &> /dev/null; then
-    sudo snap install blender --classic
+# Activate virtual environment and install Python dependencies
+echo "📦 Installing Python runtime dependencies..."
+source venv/bin/activate
+
+# Upgrade pip first
+pip install --upgrade pip
+
+# Install Python requirements for runtime
+if [ -f "requirements-python.txt" ]; then
+    pip install -r requirements-python.txt
+    echo "✅ Installed Python dependencies from requirements-python.txt"
 else
-    echo "✅ Blender already installed"
+    # Fallback: install only what's needed for runtime
+    echo "⚠️  No requirements-python.txt found, installing minimal runtime packages..."
+    pip install Flask Flask-CORS python-dotenv requests aiohttp \
+        openai-whisper torch torchaudio pydub gtts \
+        soundfile numpy jsonschema
+    echo "✅ Installed core runtime Python dependencies"
 fi
 
-# Install project dependencies
-echo "📦 Installing project dependencies..."
-npm install
+deactivate
+
+# Download AR libraries if missing
+echo ""
+echo "📦 Checking AR libraries..."
+mkdir -p frontend/lib
+
+if [ ! -f "frontend/lib/aframe.min.js" ]; then
+    echo "   Downloading A-Frame library..."
+    wget -q -O frontend/lib/aframe.min.js https://cdn.jsdelivr.net/npm/aframe@1.4.2/dist/aframe.min.js
+    if [ $? -eq 0 ]; then
+        echo "   ✅ Downloaded aframe.min.js"
+    else
+        echo "   ⚠️  Failed to download aframe.min.js - AR may not work"
+    fi
+else
+    echo "   ✅ aframe.min.js already exists"
+fi
+
+if [ ! -f "frontend/lib/mindar-image-aframe.prod.js" ]; then
+    echo "   Downloading MindAR library..."
+    wget -q -O frontend/lib/mindar-image-aframe.prod.js https://cdn.jsdelivr.net/npm/mind-ar@1.2.4/dist/mindar-image-aframe.prod.js
+    if [ $? -eq 0 ]; then
+        echo "   ✅ Downloaded mindar-image-aframe.prod.js"
+    else
+        echo "   ⚠️  Failed to download mindar-image-aframe.prod.js - AR may not work"
+    fi
+else
+    echo "   ✅ mindar-image-aframe.prod.js already exists"
+fi
+
+echo "📝 Frontend note: AR libraries are in frontend/lib/ (aframe.min.js, mindar-image-aframe.prod.js)"
+echo "   - No Node.js/npm needed - frontend uses pre-bundled libraries"
+echo "   - No build process required, just serve the static HTML file"
 
 # Create necessary directories
 echo "📁 Creating project directories..."
 mkdir -p uploads
-mkdir -p frontend/assets
-mkdir -p 3d-assets
+mkdir -p frontend/media/videos/talking-orange-talking-animation
+mkdir -p frontend/media/videos/talking-orange-thinking-animation
+mkdir -p backend/data/user
+mkdir -p backend/data/ai
 
 # Set up environment file
 echo "⚙️ Setting up environment..."
@@ -76,45 +146,52 @@ chmod 755 uploads/
 
 # Verify installation
 echo "✅ Verifying installation..."
-echo "Node.js version: $(node --version)"
-echo "npm version: $(npm --version)"
 echo "Python version: $(python3 --version)"
+echo "FFmpeg version: $(ffmpeg -version 2>/dev/null | head -n 1 || echo 'Not found')"
+echo "espeak version: $(espeak --version 2>/dev/null || echo 'Not found')"
 
-# Test server startup
-echo "🚀 Testing server startup..."
-if npm run start &> /dev/null & then
-    SERVER_PID=$!
-    sleep 2
-    if curl -s http://localhost:3000/api/health > /dev/null; then
-        echo "✅ Server started successfully"
-        kill $SERVER_PID
-    else
-        echo "❌ Server failed to start"
-        kill $SERVER_PID
-        exit 1
-    fi
-else
-    echo "❌ Failed to start server"
-    exit 1
+# Test Python backend (if available)
+echo "🚀 Testing Python backend setup..."
+if [ -f "start_backend.py" ] || [ -f "backend/app.py" ]; then
+    source venv/bin/activate
+    python3 -c "import flask; import whisper; print('✅ All core Python dependencies imported successfully')" 2>/dev/null && \
+        echo "✅ Python backend dependencies verified" || \
+        echo "⚠️  Some Python dependencies may be missing (this is okay for production if they're installed via requirements)"
+    deactivate
 fi
 
 echo ""
 echo "🎉 Installation completed successfully!"
 echo ""
-echo "📋 Next steps:"
-echo "1. Run 'npm start' to start the development server"
-echo "2. Open http://localhost:3000 in your browser"
-echo "3. Use your mobile device to test the AR experience"
+echo "📋 Next steps for SERVER DEPLOYMENT:"
 echo ""
-echo "🔧 Development commands:"
-echo "- npm start          # Start the server"
-echo "- npm run dev        # Start with auto-reload"
-echo "- npm run build      # Build the project"
+echo "1. Configure environment variables:"
+echo "   - Copy env.example to .env if needed"
+echo "   - Set VENICE_KEY and other required variables"
 echo ""
-echo "📱 Testing:"
-echo "- Use a mobile device with camera"
-echo "- Point at the AR marker (Hiro pattern)"
-echo "- Grant camera and microphone permissions"
-echo "- Ask questions about Bitcoin!"
+echo "2. Start the backend server:"
+echo "   source venv/bin/activate"
+echo "   python start_backend.py"
+echo "   # Or use systemd service (see below)"
 echo ""
-echo "🍊 Happy coding with Talking Orange!"
+echo "3. Set up nginx reverse proxy (recommended for production):"
+echo "   - Edit /etc/nginx/sites-available/talking-orange"
+echo "   - Point proxy_pass to http://127.0.0.1:3000"
+echo "   - Enable: sudo ln -s /etc/nginx/sites-available/talking-orange /etc/nginx/sites-enabled/"
+echo "   - Restart: sudo systemctl restart nginx"
+echo ""
+echo "4. Optional - Set up systemd service for auto-start:"
+echo "   - Create /etc/systemd/system/talking-orange.service"
+echo "   - Enable: sudo systemctl enable talking-orange"
+echo "   - Start: sudo systemctl start talking-orange"
+echo ""
+echo "🔧 Python backend commands:"
+echo "- source venv/bin/activate    # Activate virtual environment"
+echo "- python start_backend.py    # Start Flask server"
+echo "- python backend/app.py       # Alternative start method"
+echo ""
+echo "📱 Access your site:"
+echo "- Direct: http://YOUR_IP:3000"
+echo "- Via nginx: http://YOUR_IP (port 80)"
+echo ""
+echo "🍊 Happy deployment with Talking Orange!"

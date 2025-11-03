@@ -34,8 +34,8 @@ class TextToVoiceService:
         self.elevenlabs_api_key = os.getenv('ELEVENLABS_API_KEY')
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         
-        # Ensure voice directory exists
-        os.makedirs(self.voice_dir, exist_ok=True)
+        # Note: voice_dir is not used for storing voice files (voices come from system/cloud)
+        # Directory creation removed as it's unnecessary
         
         # Initialize available engines
         self.available_engines = []

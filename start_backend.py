@@ -46,23 +46,27 @@ def install_dependencies():
     try:
         logger.info("🔧 Installing Python dependencies...")
         
-        # Install minimal dependencies only
-        subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', 'requirements-minimal.txt'], 
+        # Install dependencies from requirements-python.txt
+        requirements_file = 'requirements-python.txt'
+        if not os.path.exists(requirements_file):
+            logger.error(f"❌ Requirements file not found: {requirements_file}")
+            sys.exit(1)
+        
+        subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', requirements_file], 
                       check=True, capture_output=True)
         
         logger.info("✅ Dependencies installed successfully")
         
     except subprocess.CalledProcessError as e:
         logger.error(f"❌ Failed to install dependencies: {e}")
+        logger.error(f"   Error output: {e.stderr.decode() if e.stderr else 'No error output'}")
         sys.exit(1)
 
 def create_directories():
     """Create necessary directories."""
     directories = [
-        'public/audio',
         'frontend',
-        'gen/prompts',
-        'gen/voices',
+        'backend/gen/prompts',
         'backend/data/user',
         'backend/data/ai'
     ]

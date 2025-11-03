@@ -579,7 +579,6 @@ def internal_error(error):
 
 if __name__ == '__main__':
     # Create necessary directories
-    os.makedirs('../public/audio', exist_ok=True)
     os.makedirs('../frontend', exist_ok=True)
     
     # Start the Flask server

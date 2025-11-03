@@ -1,16 +1,10 @@
 {
   "name": "frontend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "description": "Frontend uses pre-bundled libraries (aframe.min.js, mindar) - no npm dependencies needed",
+  "main": "index.html",
+  "scripts": {},
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "aframe": "^1.0.0",
-    "ar.js": "^1.7.8"
-  }
+  "license": "ISC"
 }

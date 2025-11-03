@@ -1203,10 +1203,22 @@
                 animationModule,
                 './media/videos/talking-orange-thinking-animation/thinking-hmm.mp3'
             );
-            const talkingController = new TalkingAnimationController(
+            // Talking controller will be updated based on language
+            let talkingController = new TalkingAnimationController(
                 animationModule,
                 './media/videos/talking-orange-talking-animation/talking-intro.mp3'
             );
+            
+            // Function to update talking controller intro audio based on language
+            function updateTalkingControllerLanguage(lang) {
+                const introAudioUrl = lang === 'es' 
+                    ? './media/videos/talking-orange-talking-animation/talking-intro-es.mp3'
+                    : './media/videos/talking-orange-talking-animation/talking-intro.mp3';
+                talkingController = new TalkingAnimationController(
+                    animationModule,
+                    introAudioUrl
+                );
+            }
             
             // Legacy audio functions (deprecated - use controllers instead)
             let thinkingAudio = null;
@@ -1536,6 +1548,7 @@
                 const button = document.getElementById('language-toggle');
                 button.textContent = currentLanguage.toUpperCase();
                 updateButtonText();
+                updateTalkingControllerLanguage(currentLanguage);
             }
             
             function updateButtonText() {
@@ -1557,6 +1570,7 @@
             window.startThinkingAnimation = startThinkingAnimation;
             window.stopThinkingAnimation = stopThinkingAnimation;
             window.askQuestion = askQuestion;
+            window.toggleLanguage = toggleLanguage; // Expose language toggle
             window.animationModule = animationModule; // Expose for console debugging
             
             // Test animation functions (single play mode)
