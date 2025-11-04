@@ -50,35 +50,13 @@ fi
 echo "📝 Creating nginx configuration..."
 NGINX_CONFIG="/etc/nginx/sites-available/talking-orange"
 
+# Create HTTP-only config first (certbot will add SSL)
 cat > "$NGINX_CONFIG" << EOF
-# Talking Orange - HTTP to HTTPS redirect
+# Talking Orange - HTTP server (certbot will add HTTPS)
 server {
     listen 80;
     listen [::]:80;
     server_name $DOMAIN;
-
-    # Redirect all HTTP to HTTPS
-    return 301 https://\$server_name\$request_uri;
-}
-
-# Talking Orange - HTTPS server
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name $DOMAIN;
-
-    # SSL certificates (will be added by certbot)
-    # ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-    # ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-
-    # SSL configuration (will be added by certbot)
-    # include /etc/letsencrypt/options-ssl-nginx.conf;
-    # ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
 
     # Increase upload size for audio files
     client_max_body_size 10M;
@@ -120,7 +98,7 @@ server {
 }
 EOF
 
-echo "✅ Nginx configuration created at $NGINX_CONFIG"
+echo "✅ Nginx configuration created at $NGINX_CONFIG (HTTP only - certbot will add HTTPS)"
 echo ""
 
 # Enable the site
