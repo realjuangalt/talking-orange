@@ -222,8 +222,17 @@ server {
 
     ssl_certificate /etc/letsencrypt/live/$DOMAIN_LOWER/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/$DOMAIN_LOWER/privkey.pem;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    
+    # SSL configuration (use certbot's if available, otherwise use basic settings)
+    if [ -f "/etc/letsencrypt/options-ssl-nginx.conf" ]; then
+        include /etc/letsencrypt/options-ssl-nginx.conf;
+        ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    else
+        # Basic SSL configuration
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+        ssl_prefer_server_ciphers on;
+    fi
 
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
