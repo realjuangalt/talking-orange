@@ -133,14 +133,18 @@ fi
 
 # Test nginx configuration
 echo "🧪 Testing nginx configuration..."
-nginx -t
+if command -v nginx &> /dev/null; then
+    nginx -t
+else
+    /usr/sbin/nginx -t
+fi
 if [ $? -ne 0 ]; then
     echo "❌ Nginx configuration test failed!"
     exit 1
 fi
 
 # Reload nginx
-systemctl reload nginx
+systemctl reload nginx || service nginx reload
 echo "✅ Nginx reloaded"
 echo ""
 
