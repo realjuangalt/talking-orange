@@ -182,18 +182,43 @@ echo ""
 
 # Get SSL certificate
 echo "🔐 Obtaining SSL certificate from Let's Encrypt..."
-echo "   This may take a few moments..."
-echo "   Note: Certbot will temporarily bind to port 80 for validation"
 echo ""
 
-# Temporarily stop Docker if it's using port 80
-DOCKER_STOPPED=false
-if command -v docker &> /dev/null && lsof -i :80 2>/dev/null | grep -q docker; then
-    echo "🛑 Temporarily stopping Docker to free port 80 for certbot..."
-    systemctl stop docker 2>/dev/null || service docker stop 2>/dev/null || true
-    DOCKER_STOPPED=true
-    sleep 2
+# Check if port 80 is available for HTTP validation
+PORT_80_AVAILABLE=true
+PORT_80_PROCESS=""
+if command -v lsof &> /dev/null; then
+    PORT_80_PROCESS=$(lsof -i :80 2>/dev/null | tail -n +2 | head -1 || true)
+    if [ -n "$PORT_80_PROCESS" ]; then
+        PORT_80_AVAILABLE=false
+    fi
 fi
+
+if [ "$PORT_80_AVAILABLE" = false ]; then
+    echo "⚠️  Port 80 is in use by another service:"
+    echo "$PORT_80_PROCESS"
+    echo ""
+    echo "❌ Cannot use HTTP validation (port 80 required)"
+    echo ""
+    echo "Options:"
+    echo "   1. Manually stop the service using port 80, then run this script again"
+    echo "   2. Use DNS validation instead (requires DNS API access)"
+    echo ""
+    echo "To find what's using port 80:"
+    echo "   sudo lsof -i :80"
+    echo "   sudo ss -tulpn | grep ':80 '"
+    echo ""
+    echo "To stop a service (example):"
+    echo "   sudo systemctl stop <service-name>"
+    echo "   # Or find the process and stop it"
+    echo ""
+    exit 1
+fi
+
+# Port 80 is available, proceed with HTTP validation
+echo "✅ Port 80 is available for Let's Encrypt validation"
+echo "   Using HTTP validation method..."
+echo ""
 
 # Update nginx config to listen on port 80 temporarily for certbot
 sed -i "s/listen $NGINX_PORT;/listen 80;\n    # listen $NGINX_PORT;/" "$NGINX_CONFIG"
@@ -205,12 +230,6 @@ certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --email "$EMAIL" --re
 # After certbot, update config back to use the custom port
 # Certbot will have added SSL, so we need to update the HTTPS server block too
 sed -i "s/listen 443 ssl http2;/listen 443 ssl http2;\n    listen $NGINX_PORT ssl http2;/" "$NGINX_CONFIG" 2>/dev/null || true
-
-# Restart Docker if we stopped it
-if [ "$DOCKER_STOPPED" = true ]; then
-    echo "🔄 Restarting Docker..."
-    systemctl start docker 2>/dev/null || service docker start 2>/dev/null || true
-fi
 
 systemctl reload nginx
 
