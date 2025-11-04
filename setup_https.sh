@@ -220,18 +220,100 @@ echo "✅ Port 80 is available for Let's Encrypt validation"
 echo "   Using HTTP validation method..."
 echo ""
 
-# Update nginx config to listen on port 80 temporarily for certbot
-sed -i "s/listen $NGINX_PORT;/listen 80;\n    # listen $NGINX_PORT;/" "$NGINX_CONFIG"
-sed -i "s/listen \[::\]:$NGINX_PORT;/listen [::]:80;\n    # listen [::]:$NGINX_PORT;/" "$NGINX_CONFIG"
-systemctl reload nginx || systemctl start nginx
+# Stop nginx temporarily for standalone certbot
+systemctl stop nginx
 
-certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --email "$EMAIL" --redirect
+# Use standalone mode (certbot runs its own server on port 80)
+certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --email "$EMAIL"
 
-# After certbot, update config back to use the custom port
-# Certbot will have added SSL, so we need to update the HTTPS server block too
-sed -i "s/listen 443 ssl http2;/listen 443 ssl http2;\n    listen $NGINX_PORT ssl http2;/" "$NGINX_CONFIG" 2>/dev/null || true
+# Now manually configure nginx with SSL
+if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+    # Update nginx config to use SSL certificates
+    cat > "$NGINX_CONFIG" << EOF
+# Talking Orange - HTTP to HTTPS redirect
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $DOMAIN;
+    return 301 https://\$server_name\$request_uri;
+}
 
-systemctl reload nginx
+# Talking Orange - HTTPS server
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    listen $NGINX_PORT ssl http2;
+    listen [::]:$NGINX_PORT ssl http2;
+    server_name $DOMAIN;
+
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # Increase upload size for audio files
+    client_max_body_size 10M;
+
+    # Frontend static files
+    location / {
+        root $PROJECT_ROOT/frontend;
+        try_files \$uri \$uri/ /index.html;
+        index index.html;
+    }
+
+    # Backend API proxy
+    location /api/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+        
+        # Increase timeouts for long-running requests (audio processing)
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+    }
+
+    # Backend static files (fallback)
+    location ~ ^/(backend|uploads|data)/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+
+    # Test and reload nginx
+    if command -v nginx &> /dev/null; then
+        nginx -t
+    else
+        /usr/sbin/nginx -t
+    fi
+    
+    if [ $? -eq 0 ]; then
+        systemctl start nginx
+        echo "✅ Nginx configured with SSL and started"
+    else
+        echo "❌ Nginx configuration test failed!"
+        exit 1
+    fi
+else
+    echo "❌ SSL certificate files not found!"
+    exit 1
+fi
 
 if [ $? -eq 0 ]; then
     echo ""
