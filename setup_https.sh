@@ -121,9 +121,15 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Reload nginx
-systemctl reload nginx || service nginx reload
-echo "✅ Nginx reloaded"
+# Start or reload nginx
+if systemctl is-active --quiet nginx; then
+    systemctl reload nginx
+    echo "✅ Nginx reloaded"
+else
+    systemctl start nginx
+    systemctl enable nginx
+    echo "✅ Nginx started and enabled"
+fi
 echo ""
 
 # Get SSL certificate
