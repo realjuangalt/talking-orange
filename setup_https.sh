@@ -26,7 +26,7 @@ fi
 
 DOMAIN=$1
 EMAIL=${2:-"juan@juangalt.com"}
-NGINX_PORT=${3:-"8080"}
+NGINX_PORT=${3:-"80"}
 
 # Detect project root (where this script is located)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -112,6 +112,11 @@ else
     echo "✅ Nginx site already enabled"
 fi
 
+# Stop nginx FIRST before any port checks or config changes
+echo "🛑 Stopping nginx..."
+systemctl stop nginx 2>/dev/null || true
+sleep 2
+
 # Test nginx configuration
 echo "🧪 Testing nginx configuration..."
 if command -v nginx &> /dev/null; then
@@ -124,7 +129,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Check if the nginx port is in use
+# Check if the nginx port is available (after stopping nginx)
 echo "🔍 Checking if port $NGINX_PORT is available..."
 PORT_IN_USE=false
 if command -v lsof &> /dev/null; then
@@ -149,7 +154,7 @@ fi
 
 if [ "$PORT_IN_USE" = true ]; then
     echo ""
-    echo "❌ Port $NGINX_PORT is already in use. Please choose a different port."
+    echo "❌ Port $NGINX_PORT is still in use. Please choose a different port."
     echo "   Usage: sudo ./setup_https.sh $DOMAIN [email] [port]"
     echo ""
     exit 1
@@ -158,11 +163,6 @@ fi
 # Note: Certbot will temporarily need port 80 for validation
 echo "ℹ️  Note: Certbot will temporarily use port 80 for SSL validation"
 echo "   (This is required by Let's Encrypt)"
-
-# Stop nginx before checking port 80 (it might be using it)
-echo "🛑 Stopping nginx temporarily for certbot..."
-systemctl stop nginx 2>/dev/null || true
-sleep 1
 
 # Check if port 80 is available for HTTP validation
 PORT_80_AVAILABLE=true
