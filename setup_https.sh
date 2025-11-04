@@ -159,30 +159,10 @@ fi
 echo "ℹ️  Note: Certbot will temporarily use port 80 for SSL validation"
 echo "   (This is required by Let's Encrypt)"
 
-# Start or reload nginx
-if systemctl is-active --quiet nginx; then
-    systemctl reload nginx
-    echo "✅ Nginx reloaded"
-else
-    echo "🚀 Starting nginx..."
-    if systemctl start nginx; then
-        systemctl enable nginx
-        echo "✅ Nginx started and enabled"
-    else
-        echo "❌ Failed to start nginx"
-        echo ""
-        echo "Checking nginx status..."
-        systemctl status nginx --no-pager -l || true
-        echo ""
-        echo "Please check the error above and fix it before continuing."
-        exit 1
-    fi
-fi
-echo ""
-
-# Get SSL certificate
-echo "🔐 Obtaining SSL certificate from Let's Encrypt..."
-echo ""
+# Stop nginx before checking port 80 (it might be using it)
+echo "🛑 Stopping nginx temporarily for certbot..."
+systemctl stop nginx 2>/dev/null || true
+sleep 1
 
 # Check if port 80 is available for HTTP validation
 PORT_80_AVAILABLE=true
@@ -195,22 +175,12 @@ if command -v lsof &> /dev/null; then
 fi
 
 if [ "$PORT_80_AVAILABLE" = false ]; then
-    echo "⚠️  Port 80 is in use by another service:"
+    echo "⚠️  Port 80 is still in use by another service:"
     echo "$PORT_80_PROCESS"
     echo ""
     echo "❌ Cannot use HTTP validation (port 80 required)"
     echo ""
-    echo "Options:"
-    echo "   1. Manually stop the service using port 80, then run this script again"
-    echo "   2. Use DNS validation instead (requires DNS API access)"
-    echo ""
-    echo "To find what's using port 80:"
-    echo "   sudo lsof -i :80"
-    echo "   sudo ss -tulpn | grep ':80 '"
-    echo ""
-    echo "To stop a service (example):"
-    echo "   sudo systemctl stop <service-name>"
-    echo "   # Or find the process and stop it"
+    echo "Please stop the service using port 80, then run this script again."
     echo ""
     exit 1
 fi
@@ -220,8 +190,9 @@ echo "✅ Port 80 is available for Let's Encrypt validation"
 echo "   Using HTTP validation method..."
 echo ""
 
-# Stop nginx temporarily for standalone certbot
-systemctl stop nginx
+# Get SSL certificate
+echo "🔐 Obtaining SSL certificate from Let's Encrypt..."
+echo ""
 
 # Use standalone mode (certbot runs its own server on port 80)
 certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --email "$EMAIL"
