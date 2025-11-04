@@ -197,8 +197,11 @@ echo ""
 # Use standalone mode (certbot runs its own server on port 80)
 certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --email "$EMAIL"
 
+# Let's Encrypt converts domain names to lowercase
+DOMAIN_LOWER=$(echo "$DOMAIN" | tr '[:upper:]' '[:lower:]')
+
 # Now manually configure nginx with SSL
-if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+if [ -f "/etc/letsencrypt/live/$DOMAIN_LOWER/fullchain.pem" ]; then
     # Update nginx config to use SSL certificates
     cat > "$NGINX_CONFIG" << EOF
 # Talking Orange - HTTP to HTTPS redirect
@@ -217,8 +220,8 @@ server {
     listen [::]:$NGINX_PORT ssl http2;
     server_name $DOMAIN;
 
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN_LOWER/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN_LOWER/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
