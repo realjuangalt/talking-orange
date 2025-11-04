@@ -17,14 +17,16 @@ fi
 
 # Check if domain is provided
 if [ -z "$1" ]; then
-    echo "Usage: sudo ./setup_https.sh your-domain.com [email]"
+    echo "Usage: sudo ./setup_https.sh your-domain.com [email] [port]"
     echo ""
     echo "Example: sudo ./setup_https.sh AR.juangalt.com"
+    echo "         sudo ./setup_https.sh AR.juangalt.com juan@juangalt.com 8080"
     exit 1
 fi
 
 DOMAIN=$1
 EMAIL=${2:-"juan@juangalt.com"}
+NGINX_PORT=${3:-"8080"}
 
 # Detect project root (where this script is located)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -34,6 +36,7 @@ echo "📋 Configuration:"
 echo "   Domain: $DOMAIN"
 echo "   Email: $EMAIL (for Let's Encrypt notifications)"
 echo "   Project Root: $PROJECT_ROOT"
+echo "   Nginx Port: $NGINX_PORT (certbot will use port 80 temporarily)"
 echo ""
 
 # Install certbot if not already installed
@@ -54,8 +57,8 @@ NGINX_CONFIG="/etc/nginx/sites-available/talking-orange"
 cat > "$NGINX_CONFIG" << EOF
 # Talking Orange - HTTP server (certbot will add HTTPS)
 server {
-    listen 80;
-    listen [::]:80;
+    listen $NGINX_PORT;
+    listen [::]:$NGINX_PORT;
     server_name $DOMAIN;
 
     # Increase upload size for audio files
@@ -121,40 +124,40 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Check if port 80 is in use before starting nginx
-echo "🔍 Checking if port 80 is available..."
-PORT_80_IN_USE=false
+# Check if the nginx port is in use
+echo "🔍 Checking if port $NGINX_PORT is available..."
+PORT_IN_USE=false
 if command -v lsof &> /dev/null; then
-    if lsof -i :80 &> /dev/null; then
-        PORT_80_IN_USE=true
-        echo "⚠️  Port 80 is already in use:"
-        lsof -i :80 || true
+    if lsof -i :$NGINX_PORT &> /dev/null; then
+        PORT_IN_USE=true
+        echo "⚠️  Port $NGINX_PORT is already in use:"
+        lsof -i :$NGINX_PORT || true
     fi
 elif command -v ss &> /dev/null; then
-    if ss -tuln | grep -q ':80 '; then
-        PORT_80_IN_USE=true
-        echo "⚠️  Port 80 is already in use:"
-        ss -tulpn | grep ':80 ' || true
+    if ss -tuln | grep -q ":$NGINX_PORT "; then
+        PORT_IN_USE=true
+        echo "⚠️  Port $NGINX_PORT is already in use:"
+        ss -tulpn | grep ":$NGINX_PORT " || true
     fi
 elif command -v netstat &> /dev/null; then
-    if netstat -tuln | grep -q ':80 '; then
-        PORT_80_IN_USE=true
-        echo "⚠️  Port 80 is already in use:"
-        netstat -tulpn | grep ':80 ' || true
+    if netstat -tuln | grep -q ":$NGINX_PORT "; then
+        PORT_IN_USE=true
+        echo "⚠️  Port $NGINX_PORT is already in use:"
+        netstat -tulpn | grep ":$NGINX_PORT " || true
     fi
 fi
 
-if [ "$PORT_80_IN_USE" = true ]; then
+if [ "$PORT_IN_USE" = true ]; then
     echo ""
-    echo "❌ Port 80 is already in use. Please stop the service using port 80 first."
-    echo ""
-    echo "Common solutions:"
-    echo "   1. Stop Apache: sudo systemctl stop apache2"
-    echo "   2. Stop other web server: Check what's using port 80 above"
-    echo "   3. If it's your Flask app, that's fine - nginx will proxy to it"
+    echo "❌ Port $NGINX_PORT is already in use. Please choose a different port."
+    echo "   Usage: sudo ./setup_https.sh $DOMAIN [email] [port]"
     echo ""
     exit 1
 fi
+
+# Note: Certbot will temporarily need port 80 for validation
+echo "ℹ️  Note: Certbot will temporarily use port 80 for SSL validation"
+echo "   (This is required by Let's Encrypt)"
 
 # Start or reload nginx
 if systemctl is-active --quiet nginx; then
@@ -180,9 +183,36 @@ echo ""
 # Get SSL certificate
 echo "🔐 Obtaining SSL certificate from Let's Encrypt..."
 echo "   This may take a few moments..."
+echo "   Note: Certbot will temporarily bind to port 80 for validation"
 echo ""
 
+# Temporarily stop Docker if it's using port 80
+DOCKER_STOPPED=false
+if command -v docker &> /dev/null && lsof -i :80 2>/dev/null | grep -q docker; then
+    echo "🛑 Temporarily stopping Docker to free port 80 for certbot..."
+    systemctl stop docker 2>/dev/null || service docker stop 2>/dev/null || true
+    DOCKER_STOPPED=true
+    sleep 2
+fi
+
+# Update nginx config to listen on port 80 temporarily for certbot
+sed -i "s/listen $NGINX_PORT;/listen 80;\n    # listen $NGINX_PORT;/" "$NGINX_CONFIG"
+sed -i "s/listen \[::\]:$NGINX_PORT;/listen [::]:80;\n    # listen [::]:$NGINX_PORT;/" "$NGINX_CONFIG"
+systemctl reload nginx || systemctl start nginx
+
 certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --email "$EMAIL" --redirect
+
+# After certbot, update config back to use the custom port
+# Certbot will have added SSL, so we need to update the HTTPS server block too
+sed -i "s/listen 443 ssl http2;/listen 443 ssl http2;\n    listen $NGINX_PORT ssl http2;/" "$NGINX_CONFIG" 2>/dev/null || true
+
+# Restart Docker if we stopped it
+if [ "$DOCKER_STOPPED" = true ]; then
+    echo "🔄 Restarting Docker..."
+    systemctl start docker 2>/dev/null || service docker start 2>/dev/null || true
+fi
+
+systemctl reload nginx
 
 if [ $? -eq 0 ]; then
     echo ""
@@ -203,7 +233,7 @@ if [ $? -eq 0 ]; then
     echo "🎉 HTTPS setup complete!"
     echo ""
     echo "📋 Your site is now available at:"
-    echo "   https://$DOMAIN"
+    echo "   https://$DOMAIN:$NGINX_PORT"
     echo ""
     echo "📝 Important notes:"
     echo "   1. Certificates auto-renew every 90 days via certbot"
