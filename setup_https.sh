@@ -121,6 +121,41 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# Check if port 80 is in use before starting nginx
+echo "🔍 Checking if port 80 is available..."
+PORT_80_IN_USE=false
+if command -v lsof &> /dev/null; then
+    if lsof -i :80 &> /dev/null; then
+        PORT_80_IN_USE=true
+        echo "⚠️  Port 80 is already in use:"
+        lsof -i :80 || true
+    fi
+elif command -v ss &> /dev/null; then
+    if ss -tuln | grep -q ':80 '; then
+        PORT_80_IN_USE=true
+        echo "⚠️  Port 80 is already in use:"
+        ss -tulpn | grep ':80 ' || true
+    fi
+elif command -v netstat &> /dev/null; then
+    if netstat -tuln | grep -q ':80 '; then
+        PORT_80_IN_USE=true
+        echo "⚠️  Port 80 is already in use:"
+        netstat -tulpn | grep ':80 ' || true
+    fi
+fi
+
+if [ "$PORT_80_IN_USE" = true ]; then
+    echo ""
+    echo "❌ Port 80 is already in use. Please stop the service using port 80 first."
+    echo ""
+    echo "Common solutions:"
+    echo "   1. Stop Apache: sudo systemctl stop apache2"
+    echo "   2. Stop other web server: Check what's using port 80 above"
+    echo "   3. If it's your Flask app, that's fine - nginx will proxy to it"
+    echo ""
+    exit 1
+fi
+
 # Start or reload nginx
 if systemctl is-active --quiet nginx; then
     systemctl reload nginx
@@ -135,9 +170,6 @@ else
         echo ""
         echo "Checking nginx status..."
         systemctl status nginx --no-pager -l || true
-        echo ""
-        echo "Checking if port 80 is in use..."
-        netstat -tuln | grep :80 || ss -tuln | grep :80 || true
         echo ""
         echo "Please check the error above and fix it before continuing."
         exit 1
