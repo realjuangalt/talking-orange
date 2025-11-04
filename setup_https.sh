@@ -20,7 +20,7 @@ if [ -z "$1" ]; then
     echo "Usage: sudo ./setup_https.sh your-domain.com [email] [port]"
     echo ""
     echo "Example: sudo ./setup_https.sh AR.juangalt.com"
-    echo "         sudo ./setup_https.sh AR.juangalt.com juan@juangalt.com 8080"
+    echo "         sudo ./setup_https.sh AR.juangalt.com juan@juangalt.com 9090"
     exit 1
 fi
 
