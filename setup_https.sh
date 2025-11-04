@@ -28,6 +28,9 @@ DOMAIN=$1
 EMAIL=${2:-"juan@juangalt.com"}
 NGINX_PORT=${3:-"80"}
 
+# Convert domain to lowercase (DNS is case-insensitive, Let's Encrypt uses lowercase)
+DOMAIN=$(echo "$DOMAIN" | tr '[:upper:]' '[:lower:]')
+
 # Detect project root (where this script is located)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$SCRIPT_DIR"
@@ -197,11 +200,8 @@ echo ""
 # Use standalone mode (certbot runs its own server on port 80)
 certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --email "$EMAIL"
 
-# Let's Encrypt converts domain names to lowercase
-DOMAIN_LOWER=$(echo "$DOMAIN" | tr '[:upper:]' '[:lower:]')
-
 # Now manually configure nginx with SSL
-if [ -f "/etc/letsencrypt/live/$DOMAIN_LOWER/fullchain.pem" ]; then
+if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
     # Update nginx config to use SSL certificates
     cat > "$NGINX_CONFIG" << EOF
 # Talking Orange - HTTP to HTTPS redirect
@@ -220,8 +220,8 @@ server {
     listen [::]:$NGINX_PORT ssl http2;
     server_name $DOMAIN;
 
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN_LOWER/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN_LOWER/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
     
     # SSL configuration (use certbot's if available, otherwise use basic settings)
     if [ -f "/etc/letsencrypt/options-ssl-nginx.conf" ]; then
