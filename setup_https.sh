@@ -126,9 +126,22 @@ if systemctl is-active --quiet nginx; then
     systemctl reload nginx
     echo "✅ Nginx reloaded"
 else
-    systemctl start nginx
-    systemctl enable nginx
-    echo "✅ Nginx started and enabled"
+    echo "🚀 Starting nginx..."
+    if systemctl start nginx; then
+        systemctl enable nginx
+        echo "✅ Nginx started and enabled"
+    else
+        echo "❌ Failed to start nginx"
+        echo ""
+        echo "Checking nginx status..."
+        systemctl status nginx --no-pager -l || true
+        echo ""
+        echo "Checking if port 80 is in use..."
+        netstat -tuln | grep :80 || ss -tuln | grep :80 || true
+        echo ""
+        echo "Please check the error above and fix it before continuing."
+        exit 1
+    fi
 fi
 echo ""
 
