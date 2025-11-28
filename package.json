@@ -1,0 +1,28 @@
+{
+  "name": "talking-orange",
+  "version": "1.0.0",
+  "description": "AR Bitcoin evangelism tool with 3D talking orange character",
+  "main": "start_backend.py",
+  "scripts": {
+    "start": "python3 start_backend.py",
+    "dev": "python3 start_backend.py",
+    "backend": "cd backend && python3 app.py",
+    "build": "echo 'Python backend - no build needed'",
+    "test": "python3 -m pytest tests/",
+    "install": "pip3 install -r requirements-python.txt"
+  },
+  "keywords": [
+    "ar",
+    "augmented-reality",
+    "bitcoin",
+    "3d",
+    "voice",
+    "qr-code"
+  ],
+  "author": "Juan Galt",
+  "license": "UNLICENSED",
+  "private": true,
+  "engines": {
+    "python": ">=3.8"
+  }
+}

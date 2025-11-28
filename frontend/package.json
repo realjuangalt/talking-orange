@@ -1,0 +1,10 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "description": "Frontend uses pre-bundled libraries (aframe.min.js, mindar) - no npm dependencies needed",
+  "main": "index.html",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
