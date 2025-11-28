@@ -1,8 +1,7 @@
 #!/bin/bash
-# Simple startup - activate venv and start backend
 
 cd "$(dirname "$0")"
+source .venv/bin/activate
+cd backend
+python3 app.py
 
-# Activate venv and start backend
-source venv/bin/activate
-python3 start_backend.py

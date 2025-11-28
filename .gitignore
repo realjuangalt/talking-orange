@@ -106,6 +106,9 @@ backend/data/
 *.webm
 *.ogg
 
+# Exception: Include animation audio files
+!frontend/media/videos/**/*.mp3
+
 # Python virtual environment
 venv/
 env/
