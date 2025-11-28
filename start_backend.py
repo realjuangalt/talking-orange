@@ -79,16 +79,17 @@ def start_server():
     """Start the Flask server."""
     try:
         logger.info("🚀 Starting Talking Orange Python Backend...")
-        
+
         # Change to backend directory and start Flask app
         os.chdir('backend')
         subprocess.run([sys.executable, 'app.py'], check=True)
-        
+
     except KeyboardInterrupt:
         logger.info("🛑 Server stopped by user")
     except subprocess.CalledProcessError as e:
         logger.error(f"❌ Server failed to start: {e}")
         sys.exit(1)
+
 
 def main():
     """Main startup function."""
