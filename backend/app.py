@@ -199,13 +199,29 @@ def health_check():
             logger.info("🔍 Voice system exists, getting status...")
             voice_status = voice_system.get_status()
             logger.info(f"🔍 Voice system status: {voice_status}")
+            
+            # Extract device info from STT service
+            device_info = {
+                "device": "unknown",
+                "use_fp16": False,
+                "model_name": "unknown"
+            }
+            if voice_status.get('stt_status'):
+                stt_status = voice_status['stt_status']
+                device_info = {
+                    "device": stt_status.get('device', 'unknown'),
+                    "use_fp16": stt_status.get('use_fp16', False),
+                    "model_name": stt_status.get('model_name', 'unknown')
+                }
         else:
             logger.info("🔍 Voice system is None")
             voice_status = {"initialized": False}
+            device_info = {"device": "unknown", "use_fp16": False, "model_name": "unknown"}
         
         status = {
             "status": "healthy",
             "voice_system": voice_status,
+            "whisper_device": device_info,
             "timestamp": time.time()
         }
         return jsonify(status)

@@ -10,7 +10,7 @@
 #   ./start_local.sh --device cpu --model small  # CPU + small model
 
 cd "$(dirname "$0")"
-source .venv/bin/activate
+source venv/bin/activate
 
 # Default values
 WHISPER_DEVICE="cpu"

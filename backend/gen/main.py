@@ -39,7 +39,7 @@ class TalkingOrangeVoiceSystem:
     """
     
     def __init__(self, model_dir: str = None, voice_dir: str = None):
-        self.model_dir = model_dir or os.getenv('MODEL_DIR', str(Path(__file__).parent.parent.parent / 'models'))
+        self.model_dir = model_dir or os.getenv('MODEL_DIR', str(Path(__file__).parent.parent / 'models'))
         self.voice_dir = voice_dir or os.getenv('VOICE_DIR', './voices')
         
         # Initialize services

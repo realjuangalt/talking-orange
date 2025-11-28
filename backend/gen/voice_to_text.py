@@ -26,43 +26,145 @@ class VoiceToTextService:
     Supports local models and GPU/CPU fallback for optimal performance.
     """
     
-    def __init__(self, model_dir: str = None, model_name: str = "medium"):
+    def __init__(self, model_dir: str = None, model_name: str = None):
         self.model_dir = model_dir or os.getenv('MODEL_DIR', str(Path(__file__).parent.parent / 'models'))
         self.model_name = model_name or os.getenv('WHISPER_MODEL_NAME', 'medium')
         self.model = None
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        # Check if CPU is forced via environment variable
+        force_cpu = os.getenv('WHISPER_FORCE_CPU', 'false').lower() == 'true'
+        if force_cpu:
+            self.device = "cpu"
+            logger.info("CPU mode forced via WHISPER_FORCE_CPU environment variable")
+        else:
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.use_fp16 = self.device == "cuda"
         
         # Ensure model directory exists
         os.makedirs(self.model_dir, exist_ok=True)
         
     def initialize(self):
-        """Initialize the Whisper model."""
+        """Initialize the Whisper model. Automatically downloads if missing."""
         try:
-            logger.info(f"Loading Whisper model '{self.model_name}' from {self.model_dir} on device={self.device}")
+            # Ensure model directory exists and is absolute
+            self.model_dir = os.path.abspath(self.model_dir)
+            os.makedirs(self.model_dir, exist_ok=True)
             
-            # Load model with fallback
+            # Verify directory is writable
+            if not os.access(self.model_dir, os.W_OK):
+                logger.warning(f"⚠️ Model directory is not writable: {self.model_dir}")
+                logger.warning(f"   Models may be downloaded to default cache location instead")
+            
+            # Check if model file exists
+            model_path = os.path.join(self.model_dir, f"{self.model_name}.pt")
+            model_exists = os.path.exists(model_path)
+            
+            logger.info(f"🔍 Checking for Whisper model '{self.model_name}' in {self.model_dir}")
+            
+            if model_exists:
+                file_size = os.path.getsize(model_path) / (1024 * 1024)  # Size in MB
+                logger.info(f"📦 Whisper model '{self.model_name}.pt' found ({file_size:.1f} MB)")
+            else:
+                logger.info(f"📥 Whisper model '{self.model_name}.pt' not found")
+                logger.info(f"   Download location: {self.model_dir}")
+                logger.info(f"   Whisper will download automatically when loading...")
+                logger.info(f"   This may take a few minutes depending on model size...")
+            
+            logger.info(f"🔄 Loading Whisper model '{self.model_name}' on device={self.device}")
+            logger.info(f"   Using download_root: {self.model_dir}")
+            
+            # Load model with fallback - Whisper will auto-download if missing
+            # Whisper automatically downloads models from HuggingFace if not found locally
             try:
+                import time
+                load_start = time.time()
+                
+                # Verify model name is valid
+                try:
+                    available_models = whisper.available_models()
+                    if self.model_name not in available_models:
+                        logger.error(f"❌ Invalid model name '{self.model_name}'. Available models: {available_models}")
+                        raise ValueError(f"Model '{self.model_name}' not in available models: {available_models}")
+                    logger.info(f"✅ Model name '{self.model_name}' is valid")
+                except Exception as model_check_error:
+                    logger.warning(f"⚠️ Could not verify model name: {model_check_error}")
+                
+                logger.info(f"📥 Calling whisper.load_model('{self.model_name}', download_root='{self.model_dir}', device='{self.device}')")
                 self.model = whisper.load_model(
                     self.model_name, 
                     download_root=self.model_dir, 
                     device=self.device
                 )
+                load_duration = time.time() - load_start
+                
+                # Check if model was downloaded
+                if not model_exists:
+                    # Check again after loading
+                    if os.path.exists(model_path):
+                        file_size = os.path.getsize(model_path) / (1024 * 1024)  # Size in MB
+                        logger.info(f"✅ Whisper model '{self.model_name}' downloaded ({file_size:.1f} MB) and loaded in {load_duration:.1f}s")
+                    else:
+                        # Check Whisper's default cache location
+                        default_cache = os.path.expanduser("~/.cache/whisper")
+                        default_model_path = os.path.join(default_cache, f"{self.model_name}.pt")
+                        if os.path.exists(default_model_path):
+                            logger.warning(f"⚠️ Model downloaded to default cache: {default_model_path}")
+                            logger.info(f"   Copying to {self.model_dir}...")
+                            try:
+                                import shutil
+                                shutil.copy2(default_model_path, model_path)
+                                logger.info(f"✅ Model copied to {model_path}")
+                            except Exception as copy_error:
+                                logger.warning(f"⚠️ Could not copy model: {copy_error}")
+                        else:
+                            logger.warning(f"⚠️ Model file not found at {model_path} or default cache")
+                            logger.info(f"   Model may be loaded in memory or using a different path")
+                elif model_exists:
+                    logger.info(f"✅ Whisper model '{self.model_name}' loaded from cache in {load_duration:.1f}s")
+                    
             except Exception as e:
-                logger.warning(f"Failed to load Whisper on {self.device}: {e}. Falling back to CPU.")
+                logger.warning(f"⚠️ Failed to load Whisper on {self.device}: {e}")
+                logger.info("🔄 Attempting to load on CPU as fallback...")
                 self.device = "cpu"
                 self.use_fp16 = False
-                self.model = whisper.load_model(
-                    self.model_name, 
-                    download_root=self.model_dir, 
-                    device=self.device
-                )
+                try:
+                    import time
+                    load_start = time.time()
+                    self.model = whisper.load_model(
+                        self.model_name, 
+                        download_root=self.model_dir, 
+                        device=self.device
+                    )
+                    load_duration = time.time() - load_start
+                    logger.info(f"✅ Whisper model loaded successfully on CPU (fallback) in {load_duration:.1f}s")
+                except Exception as fallback_error:
+                    logger.error(f"❌ Failed to load Whisper on CPU: {fallback_error}")
+                    import traceback
+                    logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                    raise fallback_error
             
-            logger.info(f"Whisper model loaded successfully on {self.device}")
+            # Verify model was loaded
+            if self.model is None:
+                raise Exception("Model is None after loading")
+            
+            # Final verification - check if model file exists now
+            if os.path.exists(model_path):
+                file_size = os.path.getsize(model_path) / (1024 * 1024)
+                logger.info(f"✅ Whisper model '{self.model_name}' initialized successfully")
+                logger.info(f"   Model file: {model_path} ({file_size:.1f} MB)")
+            else:
+                logger.warning(f"⚠️ Model file not found at expected path: {model_path}")
+                logger.info(f"   Model may be in Whisper's default cache location")
+            
+            logger.info(f"   Device: {self.device}")
+            logger.info(f"   FP16: {self.use_fp16}")
+            
             return True
             
         except Exception as e:
-            logger.error(f"Failed to initialize Whisper model: {e}")
+            logger.error(f"❌ Failed to initialize Whisper model: {e}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return False
     
     def transcribe_audio(self, audio_path: str, language: str = "en") -> Dict[str, Any]:

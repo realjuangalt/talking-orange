@@ -129,6 +129,7 @@ mkdir -p frontend/media/videos/talking-orange-talking-animation
 mkdir -p frontend/media/videos/talking-orange-thinking-animation
 mkdir -p backend/data/user
 mkdir -p backend/data/ai
+mkdir -p backend/models
 
 # Set up environment file
 echo "⚙️ Setting up environment..."
