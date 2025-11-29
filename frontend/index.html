@@ -135,6 +135,9 @@
     </div>
     
     <script>
+        // IMMEDIATE TEST - This should appear first in console
+        console.log('🚨 TEST LOG - Script is executing!');
+        console.log('🚨 TEST LOG - If you see this, JavaScript is working');
         console.log('🔍 MindAR Local Test - Using YOUR targets.mind file');
         
         // Remove VR button immediately and on interval
@@ -163,7 +166,9 @@
         }, 10000); // Every 10 seconds
         
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚨 TEST LOG - DOMContentLoaded fired!');
             const scene = document.querySelector('a-scene');
+            console.log('🚨 TEST LOG - Scene element:', scene);
             const marker = document.querySelector('[mindar-image-target]');
             const orangePlane = document.querySelector('#talking-orange-plane');
             

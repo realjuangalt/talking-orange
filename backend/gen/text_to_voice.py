@@ -94,24 +94,54 @@ class TextToVoiceService:
             
             # Choose best engine if auto
             if engine == "auto":
+                logger.info(f"🔊 [TTS] Auto-selecting best TTS engine...")
+                logger.info(f"🔊 [TTS] Available engines: {self.available_engines}")
                 engine = self._choose_best_engine()
+                logger.info(f"🔊 [TTS] Selected engine: {engine}")
+            else:
+                logger.info(f"🔊 [TTS] Using specified engine: {engine}")
+                if engine not in self.available_engines:
+                    logger.warning(f"⚠️ [TTS] Engine '{engine}' not in available engines: {self.available_engines}")
             
-            logger.info(f"Synthesizing speech with {engine} engine")
+            logger.info(f"🔊 [TTS] Synthesizing speech with {engine} engine")
+            logger.info(f"🔊 [TTS] Text length: {len(text)} characters")
+            logger.info(f"🔊 [TTS] Language: {language}, Voice: {voice}, Speed: {speed}, Pitch: {pitch}")
+            
+            import time
+            tts_start = time.time()
             
             # Route to appropriate engine
+            tts_result = None
             if engine.startswith("local_"):
-                return self._synthesize_local(text, engine, voice, language, speed, pitch)
+                logger.info(f"🔊 [TTS] Routing to local engine: {engine}")
+                tts_result = self._synthesize_local(text, engine, voice, language, speed, pitch)
             elif engine == "venice_ai":
-                return self._synthesize_venice_ai(text, voice, language, speed)
+                logger.info(f"🔊 [TTS] Routing to Venice AI cloud engine")
+                tts_result = self._synthesize_venice_ai(text, voice, language, speed)
             elif engine == "elevenlabs":
-                return self._synthesize_elevenlabs(text, voice, language, speed)
+                logger.info(f"🔊 [TTS] Routing to ElevenLabs cloud engine")
+                tts_result = self._synthesize_elevenlabs(text, voice, language, speed)
             elif engine == "openai":
-                return self._synthesize_openai(text, voice, language, speed)
+                logger.info(f"🔊 [TTS] Routing to OpenAI cloud engine")
+                tts_result = self._synthesize_openai(text, voice, language, speed)
             else:
                 raise ValueError(f"Unknown TTS engine: {engine}")
+            
+            tts_duration = round(time.time() - tts_start, 2)
+            audio_size = len(tts_result.get("audio_data", b""))
+            logger.info(f"✅ [TTS] Synthesis completed in {tts_duration}s")
+            logger.info(f"✅ [TTS] Generated audio size: {audio_size} bytes ({audio_size/1024:.1f} KB)")
+            logger.info(f"✅ [TTS] Audio format: {tts_result.get('format', 'unknown')}")
+            logger.info(f"✅ [TTS] Engine used: {tts_result.get('engine', 'unknown')}")
+            
+            return tts_result
                 
         except Exception as e:
-            logger.error(f"TTS synthesis failed: {e}")
+            tts_duration = round(time.time() - tts_start, 2) if 'tts_start' in locals() else 0
+            logger.error(f"❌ [TTS] Synthesis failed after {tts_duration}s: {e}")
+            logger.error(f"❌ [TTS] Error type: {type(e).__name__}")
+            import traceback
+            logger.error(f"❌ [TTS] Traceback: {traceback.format_exc()}")
             raise Exception(f"TTS synthesis error: {str(e)}")
     
     def _choose_best_engine(self) -> str:
@@ -137,9 +167,15 @@ class TextToVoiceService:
                          speed: float, pitch: float) -> Dict[str, Any]:
         """Synthesize speech using local TTS engines."""
         try:
+            import time
+            local_start = time.time()
+            logger.info(f"🔊 [TTS LOCAL] Starting local synthesis with {engine}...")
+            
             # Create temporary output file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
                 output_path = temp_file.name
+            
+            logger.info(f"📁 [TTS LOCAL] Temporary output file: {output_path}")
             
             # Build command based on engine
             if engine == "local_espeak":
@@ -187,11 +223,19 @@ class TextToVoiceService:
             
             # Read generated audio
             if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                file_size = os.path.getsize(output_path)
+                logger.info(f"✅ [TTS LOCAL] Audio file generated: {file_size} bytes")
                 with open(output_path, 'rb') as f:
                     audio_data = f.read()
                 
+                logger.info(f"✅ [TTS LOCAL] Audio data read: {len(audio_data)} bytes")
+                
                 # Clean up
                 os.unlink(output_path)
+                logger.info(f"🧹 [TTS LOCAL] Temporary file cleaned up")
+                
+                local_duration = round(time.time() - local_start, 2)
+                logger.info(f"✅ [TTS LOCAL] Local synthesis completed in {local_duration}s")
                 
                 return {
                     "audio_data": audio_data,
@@ -203,10 +247,18 @@ class TextToVoiceService:
                     "pitch": pitch
                 }
             else:
+                logger.error(f"❌ [TTS LOCAL] Audio file missing or empty: {output_path}")
+                logger.error(f"❌ [TTS LOCAL] File exists: {os.path.exists(output_path)}")
+                if os.path.exists(output_path):
+                    logger.error(f"❌ [TTS LOCAL] File size: {os.path.getsize(output_path)} bytes")
                 raise Exception("TTS engine failed to generate audio")
                 
         except Exception as e:
-            logger.error(f"Local TTS synthesis failed: {e}")
+            local_duration = round(time.time() - local_start, 2) if 'local_start' in locals() else 0
+            logger.error(f"❌ [TTS LOCAL] Local TTS synthesis failed after {local_duration}s: {e}")
+            logger.error(f"❌ [TTS LOCAL] Error type: {type(e).__name__}")
+            import traceback
+            logger.error(f"❌ [TTS LOCAL] Traceback: {traceback.format_exc()}")
             raise Exception(f"Local TTS error: {str(e)}")
     
     def _synthesize_gtts(self, text: str, language: str, speed: float) -> Dict[str, Any]:

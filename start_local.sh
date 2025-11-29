@@ -78,6 +78,9 @@ echo "🔧 Whisper model: $WHISPER_MODEL"
 echo "🚀 Starting backend server..."
 echo ""
 
+# Set DEBUG mode for development (enables Flask debug mode and detailed logging)
+export DEBUG=true
+
 cd backend
 python3 app.py
 

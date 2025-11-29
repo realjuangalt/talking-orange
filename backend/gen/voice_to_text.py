@@ -197,6 +197,8 @@ class VoiceToTextService:
             # Transcribe audio
             import time
             start_time = time.time()
+            logger.info(f"🎤 [WHISPER] Starting transcription with model.transcribe()...")
+            logger.info(f"🎤 [WHISPER] Parameters: fp16={self.use_fp16}, language={language}, device={self.device}")
             
             result = self.model.transcribe(
                 audio_path, 
@@ -206,7 +208,13 @@ class VoiceToTextService:
             )
             
             elapsed_time = round(time.time() - start_time, 2)
-            logger.info(f"Transcription completed in {elapsed_time}s")
+            transcription_text = result.get("text", "").strip()
+            detected_language = result.get("language", "unknown")
+            
+            logger.info(f"✅ [WHISPER] Transcription completed in {elapsed_time}s")
+            logger.info(f"📝 [WHISPER] Detected language: {detected_language}")
+            logger.info(f"📝 [WHISPER] Transcription text: '{transcription_text[:100]}...' (length: {len(transcription_text)})")
+            logger.info(f"📊 [WHISPER] Result keys: {list(result.keys())}")
             
             return {
                 "text": result["text"].strip(),
@@ -234,21 +242,38 @@ class VoiceToTextService:
         """
         temp_path = None
         try:
+            logger.info(f"🎤 [WHISPER] Starting transcription...")
+            logger.info(f"🎤 [WHISPER] Model: {self.model_name}, Device: {self.device}, FP16: {self.use_fp16}")
+            logger.info(f"🎤 [WHISPER] Language: {language}")
+            
             # Validate audio buffer
             if not audio_buffer or len(audio_buffer) < 100:
                 raise ValueError("Audio buffer is too small or empty")
             
-            logger.info(f"Processing audio buffer: {len(audio_buffer)} bytes")
+            logger.info(f"🎤 [WHISPER] Processing audio buffer: {len(audio_buffer)} bytes")
+            
+            # Check model is ready
+            if not self.model:
+                logger.error(f"❌ [WHISPER] Model is None! Model initialized: {hasattr(self, 'model')}")
+                raise Exception("Whisper model not initialized")
+            
+            logger.info(f"✅ [WHISPER] Model object exists: {type(self.model)}")
             
             # Create temporary file with WebM extension (frontend sends WebM format)
+            logger.info(f"📁 [WHISPER] Creating temporary audio file...")
+            import time
+            temp_start = time.time()
             with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_file:
                 temp_file.write(audio_buffer)
                 temp_path = temp_file.name
             
-            logger.info(f"Created temporary audio file: {temp_path}")
+            temp_duration = round(time.time() - temp_start, 2)
+            file_size = os.path.getsize(temp_path)
+            logger.info(f"✅ [WHISPER] Created temporary audio file in {temp_duration}s: {temp_path} ({file_size} bytes)")
             
             # Check if file was written successfully
             if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
+                logger.error(f"❌ [WHISPER] Failed to write audio to temporary file: {temp_path}")
                 raise ValueError("Failed to write audio to temporary file")
             
             try:
@@ -261,7 +286,9 @@ class VoiceToTextService:
                     logger.warning(f"pydub validation failed: {pydub_error}, but continuing with Whisper")
                 
                 # Transcribe the temporary file
+                logger.info(f"🎤 [WHISPER] Calling transcribe_audio() on temporary file...")
                 result = self.transcribe_audio(temp_path, language)
+                logger.info(f"✅ [WHISPER] Transcription result received: {len(result.get('text', ''))} characters")
                 return result
                 
             except Exception as transcription_error:

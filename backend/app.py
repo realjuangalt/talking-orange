@@ -110,29 +110,53 @@ def _convert_to_mp3(audio_data: bytes, output_path: str, input_format: str = 'wa
 def initialize_voice_system():
     """Initialize the voice processing system."""
     global voice_system
+    import time
+    init_start = time.time()
+    
     try:
-        logger.info("🎤 Initializing Talking Orange Voice System...")
+        logger.info("🎤 [INIT] Initializing Talking Orange Voice System...")
+        logger.info(f"🎤 [INIT] Voice system currently: {'exists' if voice_system else 'None'}")
         
         # Try to create the voice system
-        logger.info("🔧 Creating TalkingOrangeVoiceSystem instance...")
+        logger.info("🔧 [INIT] Creating TalkingOrangeVoiceSystem instance...")
+        create_start = time.time()
         voice_system = TalkingOrangeVoiceSystem()
-        logger.info("✅ TalkingOrangeVoiceSystem instance created")
+        create_duration = round(time.time() - create_start, 2)
+        logger.info(f"✅ [INIT] TalkingOrangeVoiceSystem instance created in {create_duration}s")
         
         # Initialize asynchronously
-        logger.info("🔄 Running async initialization...")
+        logger.info("🔄 [INIT] Running async initialization...")
+        init_voice_start = time.time()
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             result = loop.run_until_complete(voice_system.initialize())
-            logger.info(f"✅ Async initialization result: {result}")
+            init_voice_duration = round(time.time() - init_voice_start, 2)
+            logger.info(f"✅ [INIT] Async initialization completed in {init_voice_duration}s, result: {result}")
         except Exception as async_error:
-            logger.error(f"❌ Async initialization failed: {async_error}")
+            logger.error(f"❌ [INIT] Async initialization failed: {async_error}")
+            import traceback
+            logger.error(f"❌ [INIT] Async error traceback: {traceback.format_exc()}")
             # Try synchronous initialization as fallback
-            logger.info("🔄 Trying synchronous initialization...")
+            logger.info("🔄 [INIT] Trying synchronous initialization as fallback...")
+            init_voice_start = time.time()
             result = voice_system.initialize_sync()
-            logger.info(f"✅ Sync initialization result: {result}")
+            init_voice_duration = round(time.time() - init_voice_start, 2)
+            logger.info(f"✅ [INIT] Sync initialization completed in {init_voice_duration}s, result: {result}")
         
-        logger.info("✅ Voice System initialized successfully")
+        total_duration = round(time.time() - init_start, 2)
+        logger.info(f"✅ [INIT] Voice System initialized successfully in {total_duration}s total")
+        
+        # Log system status
+        if voice_system:
+            status = voice_system.get_status()
+            logger.info(f"📊 [INIT] Voice system status: initialized={status.get('initialized', False)}")
+            if status.get('stt_status'):
+                stt = status['stt_status']
+                logger.info(f"📊 [INIT] STT: device={stt.get('device')}, model={stt.get('model_name')}, fp16={stt.get('use_fp16')}")
+            if status.get('tts_status'):
+                tts = status['tts_status']
+                logger.info(f"📊 [INIT] TTS: engines={tts.get('available_engines', [])}")
         
     except Exception as e:
         logger.error(f"❌ Voice System initialization failed: {e}")
@@ -293,12 +317,24 @@ def process_speech():
                     # Don't fail the whole request if we can't save the file
                 
                 # Process audio with voice system
-                logger.info(f"🎤 Calling voice_system.process_voice_input_sync...")
+                import time
+                api_start = time.time()
+                logger.info(f"🎤 [API] Calling voice_system.process_voice_input_sync...")
+                logger.info(f"🎤 [API] Audio buffer size: {len(audio_buffer)} bytes")
+                logger.info(f"🎤 [API] Language: {language}, TTS voice: {tts_voice}, TTS engine: {tts_engine}")
+                
                 result = voice_system.process_voice_input_sync(
                     audio_buffer, language, tts_voice, tts_engine
                 )
-                logger.info(f"🎤 Voice processing result keys: {list(result.keys())}")
-                logger.info(f"🎤 Voice processing result audio_data length: {len(result.get('audio_data', b''))} bytes")
+                
+                api_duration = round(time.time() - api_start, 2)
+                logger.info(f"✅ [API] Voice processing completed in {api_duration}s")
+                logger.info(f"📊 [API] Voice processing result keys: {list(result.keys())}")
+                logger.info(f"📊 [API] Transcription: '{result.get('transcription', '')[:50]}...'")
+                logger.info(f"📊 [API] Response text length: {len(result.get('response_text', ''))} characters")
+                logger.info(f"📊 [API] Audio data length: {len(result.get('audio_data', b''))} bytes")
+                logger.info(f"📊 [API] STT engine: {result.get('stt_engine', 'unknown')}")
+                logger.info(f"📊 [API] TTS engine: {result.get('tts_engine', 'unknown')}")
                 
                 # Validate result
                 if not result or 'transcription' not in result:

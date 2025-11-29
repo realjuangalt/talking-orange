@@ -95,27 +95,47 @@ class TalkingOrangeVoiceSystem:
         Synchronous version of process_voice_input for Flask compatibility.
         """
         try:
-            logger.info("Processing voice input (sync)...")
+            import time
+            process_start = time.time()
+            logger.info(f"🔄 [VOICE SYSTEM] Starting voice processing (sync)...")
+            logger.info(f"🔄 [VOICE SYSTEM] Input type: {type(audio_input).__name__}, Language: {language}")
+            logger.info(f"🔄 [VOICE SYSTEM] TTS voice: {tts_voice}, TTS engine: {tts_engine}")
             
             # Transcribe audio
             if isinstance(audio_input, bytes):
+                logger.info(f"🎤 [VOICE SYSTEM] Processing audio buffer ({len(audio_input)} bytes)...")
+                transcription_start = time.time()
                 transcription = self.stt_service.transcribe_audio_buffer(audio_input, language)
+                transcription_duration = round(time.time() - transcription_start, 2)
                 user_text = transcription["text"]
+                logger.info(f"✅ [VOICE SYSTEM] Transcription completed in {transcription_duration}s")
             else:
+                logger.info(f"📝 [VOICE SYSTEM] Processing text input directly")
                 user_text = audio_input
             
-            logger.info(f"Transcribed text: {user_text}")
+            logger.info(f"📝 [VOICE SYSTEM] Transcribed text: '{user_text}'")
             
             # Generate Bitcoin response
+            logger.info(f"🤖 [VOICE SYSTEM] Generating Bitcoin response...")
+            response_start = time.time()
             response_text = self._generate_bitcoin_response_sync(user_text, language)
-            logger.info(f"Generated response: {response_text[:100]}...")
+            response_duration = round(time.time() - response_start, 2)
+            logger.info(f"✅ [VOICE SYSTEM] Response generated in {response_duration}s")
+            logger.info(f"💬 [VOICE SYSTEM] Generated response: '{response_text[:100]}...' (length: {len(response_text)})")
             
             # Synthesize speech
+            logger.info(f"🔊 [VOICE SYSTEM] Starting TTS synthesis...")
+            tts_start = time.time()
             try:
                 from .text_to_voice import synthesize_speech_sync
             except ImportError:
                 from text_to_voice import synthesize_speech_sync
             tts_result = synthesize_speech_sync(response_text, voice=tts_voice, language=language, engine=tts_engine)
+            tts_duration = round(time.time() - tts_start, 2)
+            logger.info(f"✅ [VOICE SYSTEM] TTS synthesis completed in {tts_duration}s")
+            
+            total_duration = round(time.time() - process_start, 2)
+            logger.info(f"✅ [VOICE SYSTEM] Total processing time: {total_duration}s (STT: {transcription_duration if isinstance(audio_input, bytes) else 0}s, LLM: {response_duration}s, TTS: {tts_duration}s)")
             
             return {
                 "transcription": user_text,
@@ -127,7 +147,11 @@ class TalkingOrangeVoiceSystem:
             }
             
         except Exception as e:
-            logger.error(f"Voice processing failed (sync): {e}")
+            import traceback
+            process_duration = round(time.time() - process_start, 2) if 'process_start' in locals() else 0
+            logger.error(f"❌ [VOICE SYSTEM] Voice processing failed after {process_duration}s: {e}")
+            logger.error(f"❌ [VOICE SYSTEM] Error type: {type(e).__name__}")
+            logger.error(f"❌ [VOICE SYSTEM] Traceback: {traceback.format_exc()}")
             return {
                 "transcription": "",
                 "response_text": "I'm having trouble processing your request. Please try again.",

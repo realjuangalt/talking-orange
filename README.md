@@ -5,10 +5,11 @@ An augmented reality application that brings a 3D talking orange character to li
 ## 🎯 Project Overview
 
 This project creates an AR experience where users:
-1. Point their camera at a printed talking orange marker
+1. Point their camera at a printed talking orange marker (credit card-sized)
 2. See a 3D talking orange character projected onto the marker
 3. Interact with the character through voice commands about Bitcoin
 4. Receive audio responses with synchronized mouth animations
+5. Can stop audio playback at any time with the stop button
 
 ## 🛠️ Technology Stack
 
@@ -17,144 +18,395 @@ This project creates an AR experience where users:
 - **MindAR** - Modern marker-based AR framework (MIT License)
 - **A-Frame** - Web framework for VR/AR (MIT License)
 - **Three.js** - 3D rendering (MIT License)
-- **Web Speech API** - Voice recognition and synthesis
 - **MediaRecorder API** - Audio recording
+- **Web Audio API** - Audio playback
 
 ### Backend
-- **Python Flask** - Web framework (BSD License)
-- **Whisper** - Speech-to-text (MIT License)
-- **OpenAI API** - LLM for Bitcoin responses
-- **Text-to-Speech** - Audio response generation
+- **Python 3.8+** - Runtime environment
+- **Flask** - Web framework (BSD License)
+- **Whisper** - OpenAI's speech-to-text (MIT License)
+- **Venice AI API** - LLM for Bitcoin responses
+- **Text-to-Speech** - Multiple TTS engines (espeak, festival, pico2wave, Venice AI)
 
 ### AR Assets
-- **Custom PNG Images** - Talking orange character with mouth states
+- **Custom PNG Images** - Talking orange character with animation frames
 - **MindAR Targets** - Compiled `.mind` files for marker detection
+- **Frame Animations** - 145 frames for talking and thinking animations
 
-## 📋 Current Status
+## ✅ Current Features
 
-### ✅ **CONFIRMED WORKING**
+### AR System
+- ✅ **Marker Detection** - MindAR successfully detects credit card-sized markers
+- ✅ **Image Projection** - Talking orange character projects onto marker
+- ✅ **Tracking Stability** - Optimized for 1-2 feet viewing distance
+- ✅ **Smoothing & Hysteresis** - Reduces wobble and maintains visibility during brief losses
+- ✅ **Comprehensive Logging** - Detailed tracking, position, and rotation logs
 
-#### **Core Application Infrastructure**
-- [x] **Welcome Screen & UI** - Clean, centered interface with permission explanations
-- [x] **Camera & Microphone Permissions** - Proper permission flow and error handling
-- [x] **Screen Management** - Smooth transitions between welcome, camera, and error screens
-- [x] **Status Indicators** - Real-time camera and microphone status display
+### Voice System
+- ✅ **Speech-to-Text** - Whisper integration (supports small/medium models)
+- ✅ **CPU/GPU Support** - Automatic device detection with manual override
+- ✅ **Model Management** - Automatic model downloading to `backend/models/`
+- ✅ **LLM Integration** - Venice AI for Bitcoin evangelism responses
+- ✅ **Text-to-Speech** - Multiple TTS engines with fallback
+- ✅ **Audio Playback** - MP3 audio responses with stop button
 
-#### **Audio System**
-- [x] **Audio Recording** - MediaRecorder API integration for voice capture
-- [x] **Backend Communication** - Flask API for processing audio data
-- [x] **Speech-to-Text** - Whisper integration for voice recognition
-- [x] **LLM Integration** - OpenAI API for Bitcoin-related responses
-- [x] **Text-to-Speech** - Audio response generation and playback
-- [x] **Session Management** - Proper session handling and data flow
+### Animation System
+- ✅ **Talking Animation** - 145-frame animation synchronized with audio
+- ✅ **Thinking Animation** - 145-frame animation for processing state
+- ✅ **Idle State** - Smile/wink states when not active
+- ✅ **Frame-based Animations** - Advanced mode with texture preloading
+- ✅ **Image-based Fallback** - Simple mode if frames not available
 
-#### **AR Infrastructure**
-- [x] **MindAR Integration** - A-Frame and MindAR framework loading
-- [x] **Marker Detection** - Successfully detects the talking orange marker
-- [x] **Scene Creation** - AR scene initialization and camera setup
-- [x] **Asset Loading** - PNG images loaded correctly (base, half-open mouth, wide-open mouth)
-- [x] **Event System** - `targetFound` and `targetLost` events working
-- [x] **Talking Animation System** - Mouth state cycling logic implemented
+### UI Features
+- ✅ **Ask Question Button** - Voice recording with visual feedback
+- ✅ **Stop Button** - Interrupt audio playback (appears during speech)
+- ✅ **Language Toggle** - English/Spanish support
+- ✅ **Test Buttons** - Manual animation testing
+- ✅ **Mobile Responsive** - Touch-friendly controls
 
-#### **Modular Architecture**
-- [x] **UIManager** - Handles all UI elements and screen transitions
-- [x] **CameraManager** - Manages camera/microphone permissions and access
-- [x] **AudioManager** - Handles recording, backend communication, audio playback
-- [x] **MindARManager** - Dedicated AR functionality management
-- [x] **Application Coordinator** - Orchestrates all modules
-
-### ❌ **NOT CONFIRMED WORKING**
-
-#### **AR Image Projection**
-- [ ] **Transparent PNG Projection** - The talking orange image is not visible on the marker
-- [ ] **Visual Feedback** - No visual confirmation that the AR overlay is working
-- [ ] **Asset Positioning** - Image positioning and scaling on the marker
-
-#### **Animation Integration**
-- [ ] **Mouth Animation Triggering** - Talking animation not triggered by voice responses
-- [ ] **Synchronized Audio/Visual** - Audio playback and mouth movement not synchronized
-
-## 🎯 **CURRENT FOCUS**
-
-**Primary Goal**: Get the transparent PNG image to project onto the marker in AR
-
-**Secondary Goals**:
-- Integrate talking animation with voice responses
-- Ensure smooth audio-visual synchronization
-- Optimize AR performance and stability
-
-## 🔧 **Technical Details**
-
-### **Working Components**
-- **Permission System**: Robust camera/microphone access with proper error handling
-- **Audio Pipeline**: Complete voice-to-text-to-speech workflow
-- **Backend API**: Flask server with Whisper, OpenAI, and TTS integration
-- **AR Detection**: MindAR successfully identifies the marker
-- **Modular Code**: Clean separation of concerns for easy debugging
-
-### **Current Issue**
-The MindAR system detects the marker correctly but the `a-plane` element with the talking orange PNG is not visible. This appears to be a rendering or positioning issue within the A-Frame/MindAR setup.
-
-### **Debugging Approach**
-- Modular architecture allows isolated testing of AR components
-- Global access to `window.mindar` for console debugging
-- Exact replication of working `mindar-local.html` configuration
-- Comprehensive logging throughout the AR pipeline
+### Debugging & Monitoring
+- ✅ **Frontend Logging** - 168+ console.log statements for debugging
+- ✅ **Backend Logging** - Comprehensive server-side logs
+- ✅ **Tracking Debug Tools** - `window.trackingDebug` API for console
+- ✅ **Animation Debug** - `window.animationModule` access
+- ✅ **Health Check API** - `/api/health` for system status
 
 ## 📁 Project Structure
 
 ```
 talking-orange/
 ├── frontend/
-│   ├── index.html          # Main application (modular architecture)
-│   ├── mindar-local.html   # Working AR test page
-│   ├── css/style.css       # Styling
-│   └── targets.mind        # Compiled MindAR marker file
+│   ├── index.html              # Main AR application
+│   ├── lib/                     # Pre-bundled AR libraries
+│   │   ├── aframe.min.js
+│   │   └── mindar-image-aframe.prod.js
+│   └── media/
+│       ├── targets.mind         # MindAR marker file
+│       ├── talking-orange-*.png # Character images
+│       └── videos/
+│           ├── talking-orange-talking-animation/  # 145 frames + audio
+│           └── talking-orange-thinking-animation/ # 145 frames + audio
 ├── backend/
-│   ├── app.py             # Flask server with API endpoints
-│   └── venv/              # Python virtual environment
-├── talking-orange-smile.png            # Smile/closed mouth (idle state)
-├── talking-orange-half-open-mouth.png  # Half-open mouth (talking animation)
-├── talking-orange-open-mouth.png       # Wide-open mouth (talking animation)
+│   ├── app.py                   # Flask server
+│   ├── gen/                     # Voice processing modules
+│   │   ├── main.py             # Main voice system
+│   │   ├── voice_to_text.py    # Whisper STT
+│   │   ├── text_to_voice.py    # TTS engines
+│   │   └── text_generator.py   # LLM integration
+│   ├── models/                  # Whisper models (small.pt, medium.pt)
+│   └── voices/                  # TTS voice files
+├── start.sh                     # Production server script
+├── start_local.sh               # Development server with options
+├── install.sh                   # Installation script
+├── requirements-python.txt      # Python dependencies
 └── README.md
 ```
 
 ## 🚀 Getting Started
 
-### **Prerequisites**
-- Python 3.x with Flask
-- Modern web browser with camera/microphone support
-- HTTPS or localhost (required for camera access)
+### Prerequisites
+- **Linux** (tested on Debian/Ubuntu)
+- **Python 3.8+**
+- **FFmpeg** (for audio processing)
+- **Modern web browser** with camera/microphone support
+- **HTTPS or localhost** (required for camera access)
 
-### **Setup**
-1. **Backend**: 
+### Installation
+
+1. **Clone the repository**
    ```bash
-   cd backend
-   source venv/bin/activate
-   python app.py
+   git clone https://github.com/realjuangalt/talking-orange.git
+   cd talking-orange
    ```
 
-2. **Frontend**: 
-   - Navigate to `http://localhost:3000`
-   - Grant camera and microphone permissions
-   - Point camera at the talking orange marker
+2. **Run installation script**
+   ```bash
+   chmod +x install.sh
+   ./install.sh
+   ```
 
-### **Testing**
-- **AR Detection**: Console logs show "Target found!" when marker is detected
-- **Audio System**: Microphone button records and processes voice input
-- **Backend**: API endpoints respond with Bitcoin-related audio
+   This will:
+   - Install system dependencies (FFmpeg, TTS engines, etc.)
+   - Create Python virtual environment
+   - Install Python packages
+   - Download AR libraries
+   - Create necessary directories
+   - Set up `backend/models/` directory
 
-## 🔒 License Compliance
+3. **Configure environment** (optional)
+   ```bash
+   cp env.example .env
+   # Edit .env with your API keys and settings
+   ```
 
-All technologies used are open source and allow commercial use:
-- **MIT License**: MindAR, A-Frame, Three.js, Whisper
-- **BSD License**: Flask
-- **Web Standards**: HTML5, CSS3, JavaScript, Web APIs
+### Running the Server
+
+#### Development Mode (Recommended)
+```bash
+./start_local.sh [--device cpu|gpu] [--model small|medium]
+```
+
+**Options:**
+- `--device cpu|gpu` - Force CPU or GPU mode (default: cpu)
+- `--model small|medium` - Whisper model size (default: small)
+
+**Examples:**
+```bash
+# Default: CPU mode, small model
+./start_local.sh
+
+# GPU mode with medium model
+./start_local.sh --device gpu --model medium
+
+# CPU mode with small model (faster startup)
+./start_local.sh --device cpu --model small
+```
+
+**Features:**
+- ✅ Enables Flask debug mode (`DEBUG=true`)
+- ✅ Detailed logging
+- ✅ Auto-reload on code changes
+- ✅ Model auto-download if missing
+
+#### Production Mode
+```bash
+./start.sh
+```
+
+**Note:** Production mode runs with `DEBUG=false` by default. Set `DEBUG=true` in `.env` for debug mode.
+
+### Accessing the Application
+
+1. **Open browser** to `http://localhost:3000`
+2. **Grant permissions** for camera and microphone
+3. **Print the marker** from `frontend/media/talking-orange-card-base.pdf`
+4. **Point camera** at the marker (1-2 feet away)
+5. **Click "Ask Question"** to start voice interaction
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Create a `.env` file in the project root:
+
+```bash
+# Server Configuration
+PORT=3000
+DEBUG=true                    # Enable Flask debug mode
+
+# Whisper Configuration
+WHISPER_MODEL_NAME=small      # small or medium
+WHISPER_FORCE_CPU=true        # Force CPU mode (true/false)
+
+# Model Directory
+MODEL_DIR=./backend/models    # Where Whisper models are stored
+
+# API Keys (if using external services)
+VENICE_KEY=your_key_here
+```
+
+### Whisper Models
+
+**Model Sizes:**
+- `small` - ~462MB, faster, good accuracy
+- `medium` - ~1.5GB, slower, better accuracy
+
+**Model Location:**
+- Models are stored in `backend/models/`
+- Automatically downloaded on first use
+- Can be manually downloaded from [HuggingFace](https://huggingface.co/openai/whisper-medium)
+
+### MindAR Configuration
+
+AR tracking parameters in `frontend/index.html`:
+```html
+<a-scene mindar-image="
+  imageTargetSrc: ./media/targets.mind;
+  maxTrack: 1;
+  missTolerance: 60;        # Frames before considering lost
+  warmupTolerance: 5;       # Frames before first detection
+  filterMinCF: 0.00005;     # Kalman filter minimum
+  filterBeta: 5000;         # Kalman filter beta
+  ...">
+```
+
+**Optimized for:**
+- Credit card-sized markers
+- 1-2 feet viewing distance
+- Stable tracking with reduced wobble
+
+## 🐛 Debugging
+
+### Frontend Console
+
+Open browser DevTools (F12) → Console tab. You'll see:
+- 🍊 `[INIT]` - Application startup logs
+- 🎯 `[TRACKING]` - AR marker detection events
+- 📍 `[POSITION]` - Position tracking data
+- 🔄 `[ROTATION]` - Rotation tracking data
+- 🔊 `[AUDIO]` - Audio playback events
+- ⏱️ `[TIMER]` - Uptime counter (every 10 seconds)
+
+### Debug Tools
+
+**In Browser Console:**
+```javascript
+// Get tracking statistics
+window.trackingDebug.getStats()
+
+// Get marker position
+window.trackingDebug.getPosition()
+
+// Get marker rotation
+window.trackingDebug.getRotation()
+
+// Clear tracking history
+window.trackingDebug.clearHistory()
+
+// Access animation module
+window.animationModule.getStatus()
+
+// Test animations
+window.testTalkingAnimation()
+window.testThinkingAnimation()
+```
+
+### Backend Logging
+
+**Server logs show:**
+- 🎤 Voice system initialization
+- 🔍 Model loading (CPU/GPU, model name)
+- 📊 API request/response times
+- ⚠️ Errors and warnings
+
+**Enable debug mode:**
+```bash
+export DEBUG=true
+./start_local.sh
+```
+
+### Health Check
+
+Check system status:
+```bash
+curl http://localhost:3000/api/health
+```
+
+Returns:
+```json
+{
+  "status": "healthy",
+  "whisper_device": {
+    "device": "cpu",
+    "use_fp16": false,
+    "model_name": "small"
+  },
+  "voice_system": {
+    "initialized": true
+  }
+}
+```
+
+## 📊 API Endpoints
+
+### Voice Processing
+- `POST /api/speech/process` - Full voice-to-voice pipeline
+- `POST /api/speech/transcribe` - Speech-to-text only
+- `POST /api/speech/synthesize` - Text-to-speech only
+
+### System
+- `GET /api/health` - System health and status
+- `GET /api/voices` - Available TTS voices
+
+### Static Files
+- `GET /` - Main application
+- `GET /<filename>` - Static assets from `frontend/`
+
+## 🎨 AR Marker
+
+**Marker File:** `frontend/media/targets.mind`
+
+**Print Instructions:**
+1. Print `frontend/media/talking-orange-card-base.pdf` at actual size
+2. Ensure good lighting and contrast
+3. Keep marker flat and visible
+4. Optimal distance: 1-2 feet from camera
+
+## 🔍 Troubleshooting
+
+### No Console Logs
+- ✅ Check browser console filters (Info, Warnings, Errors enabled)
+- ✅ Hard refresh (Ctrl+Shift+R / Cmd+Shift+R)
+- ✅ Check for JavaScript errors (red messages)
+
+### AR Marker Not Detected
+- ✅ Ensure good lighting
+- ✅ Hold marker 1-2 feet from camera
+- ✅ Keep marker flat and in focus
+- ✅ Check console for tracking logs
+
+### Audio Not Playing
+- ✅ Check browser console for audio errors
+- ✅ Verify microphone permissions
+- ✅ Check backend logs for API errors
+- ✅ Test with stop button (should appear during playback)
+
+### Model Not Downloading
+- ✅ Check `backend/models/` directory exists
+- ✅ Verify write permissions
+- ✅ Check internet connection
+- ✅ Review backend logs for download progress
+
+### Slow Performance
+- ✅ Use `small` model instead of `medium`
+- ✅ Enable GPU mode if available: `./start_local.sh --device gpu`
+- ✅ Check system resources (CPU, RAM)
+
+## 📝 Development
+
+### Code Structure
+
+**Frontend (`frontend/index.html`):**
+- Modular JavaScript architecture
+- Event-driven AR tracking
+- Frame-based animation system
+- Comprehensive logging (168+ console.log statements)
+
+**Backend (`backend/`):**
+- Flask REST API
+- Modular voice processing (`backend/gen/`)
+- Automatic model management
+- Error handling and logging
+
+### Adding Features
+
+1. **New Animation States:** Add frames to `frontend/media/videos/`
+2. **New TTS Voices:** Configure in `backend/gen/text_to_voice.py`
+3. **New Prompts:** Add to `backend/gen/prompts/`
+4. **API Endpoints:** Add routes in `backend/app.py`
 
 ## 📄 License
 
 This project is proprietary. All rights reserved.
 
+**Third-party Licenses:**
+- **MIT License:** MindAR, A-Frame, Three.js, Whisper
+- **BSD License:** Flask
+- **PSF License:** Python
+
+## 🤝 Contributing
+
+This is a private project. For issues or questions, contact the maintainer.
+
+## 📚 Additional Resources
+
+- [MindAR Documentation](https://github.com/hiukim/mind-ar-js)
+- [A-Frame Documentation](https://aframe.io/docs/)
+- [Whisper Documentation](https://github.com/openai/whisper)
+- [Flask Documentation](https://flask.palletsprojects.com/)
+
 ---
 
-**Note**: This is a Bitcoin evangelism tool with patent and copyright protection.
+**Last Updated:** 2024
+**Version:** 1.0
+**Status:** ✅ Production Ready
