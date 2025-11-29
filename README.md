@@ -332,6 +332,34 @@ Returns:
 3. Keep marker flat and visible
 4. Optimal distance: 1-2 feet from camera
 
+## 🔍 Server Diagnostics
+
+### Check Audio Permissions (Run on Server)
+
+If audio files aren't being saved, run these diagnostic commands on your server:
+
+```bash
+# Quick check
+./check_server.sh
+
+# Detailed Python diagnostic
+cd backend
+python3 check_audio_permissions.py
+```
+
+**Common fixes:**
+```bash
+# Fix permissions
+chmod 755 backend/data/ai
+chmod 755 backend/data/user
+
+# Or fix ownership
+chown -R $(whoami) backend/data
+
+# Check if directories exist
+ls -la backend/data/
+```
+
 ## 🔍 Troubleshooting
 
 ### No Console Logs

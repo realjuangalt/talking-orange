@@ -137,10 +137,21 @@ class TalkingOrangeVoiceSystem:
             total_duration = round(time.time() - process_start, 2)
             logger.info(f"✅ [VOICE SYSTEM] Total processing time: {total_duration}s (STT: {transcription_duration if isinstance(audio_input, bytes) else 0}s, LLM: {response_duration}s, TTS: {tts_duration}s)")
             
+            # Validate TTS result has audio data
+            tts_audio_data = tts_result.get("audio_data", b"")
+            if not tts_audio_data or len(tts_audio_data) == 0:
+                logger.error(f"❌ [VOICE SYSTEM] TTS result has no audio data!")
+                logger.error(f"❌ [VOICE SYSTEM] TTS result keys: {list(tts_result.keys())}")
+                logger.error(f"❌ [VOICE SYSTEM] TTS engine: {tts_result.get('engine', 'unknown')}")
+                raise ValueError("TTS synthesis returned empty audio data")
+            
+            logger.info(f"✅ [VOICE SYSTEM] TTS audio data validated: {len(tts_audio_data)} bytes")
+            
             return {
                 "transcription": user_text,
                 "response_text": response_text,
-                "audio_data": tts_result["audio_data"],
+                "audio_data": tts_audio_data,
+                "audio_format": tts_result.get("format", "wav"),  # Include format for conversion
                 "stt_engine": "whisper",
                 "tts_engine": tts_result["engine"],
                 "tts_voice": tts_result["voice"]

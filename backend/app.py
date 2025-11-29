@@ -303,9 +303,12 @@ def process_speech():
                 logger.info(f"🔊 First 20 bytes: {audio_buffer[:20] if len(audio_buffer) > 20 else audio_buffer}")
                 
                 # Save user audio input to data/user/ with timestamp
+                # Use absolute path to avoid issues with working directory
+                backend_dir = os.path.dirname(os.path.abspath(__file__))
+                data_user_dir = os.path.join(backend_dir, 'data', 'user')
                 user_audio_filename = f"user_input_{session_id}_{int(time.time())}.webm"
-                user_audio_path = os.path.join('data', 'user', user_audio_filename)
-                os.makedirs(os.path.dirname(user_audio_path), exist_ok=True)
+                user_audio_path = os.path.join(data_user_dir, user_audio_filename)
+                os.makedirs(data_user_dir, exist_ok=True)
                 
                 try:
                     with open(user_audio_path, 'wb') as f:
@@ -358,8 +361,11 @@ def process_speech():
             return jsonify({"error": "No text or audio provided"}), 400
         
         # Save AI audio response to data/ai/ with timestamp (as MP3)
+        # Use absolute path to avoid issues with working directory
+        backend_dir = os.path.dirname(os.path.abspath(__file__))
+        data_ai_dir = os.path.join(backend_dir, 'data', 'ai')
         audio_filename = f"ai_response_{session_id}_{int(time.time())}.mp3"
-        audio_path = os.path.join('data', 'ai', audio_filename)
+        audio_path = os.path.join(data_ai_dir, audio_filename)
         
         logger.info(f"💾 Saving audio response...")
         logger.info(f"📁 Audio filename: {audio_filename}")
@@ -370,25 +376,83 @@ def process_speech():
         
         # Ensure AI audio directory exists
         audio_dir = os.path.dirname(audio_path)
-        logger.info(f"📁 Audio directory: {audio_dir}")
-        os.makedirs(audio_dir, exist_ok=True)
-        logger.info(f"✅ Audio directory exists: {os.path.exists(audio_dir)}")
+        logger.info(f"📁 [AUDIO SAVE] Audio directory: {audio_dir}")
+        logger.info(f"📁 [AUDIO SAVE] Audio directory absolute path: {os.path.abspath(audio_dir)}")
+        
+        # Check if directory exists
+        if not os.path.exists(audio_dir):
+            logger.info(f"📁 [AUDIO SAVE] Directory does not exist, creating...")
+            try:
+                os.makedirs(audio_dir, exist_ok=True)
+                logger.info(f"✅ [AUDIO SAVE] Directory created")
+            except Exception as mkdir_error:
+                logger.error(f"❌ [AUDIO SAVE] Failed to create directory: {mkdir_error}")
+                raise
+        else:
+            logger.info(f"✅ [AUDIO SAVE] Directory already exists")
+        
+        # Check directory permissions
+        if os.path.exists(audio_dir):
+            is_writable = os.access(audio_dir, os.W_OK)
+            logger.info(f"📁 [AUDIO SAVE] Directory writable: {is_writable}")
+            if not is_writable:
+                logger.error(f"❌ [AUDIO SAVE] Directory is NOT writable! Permission denied.")
+                logger.error(f"❌ [AUDIO SAVE] Try: chmod 755 {audio_dir} or chown to current user")
+                raise PermissionError(f"Directory {audio_dir} is not writable")
+        else:
+            logger.error(f"❌ [AUDIO SAVE] Directory does not exist after creation attempt!")
+            raise FileNotFoundError(f"Directory {audio_dir} does not exist")
         
         # Write AI audio data (convert to MP3 if needed)
         try:
-            audio_data = result['audio_data']
+            audio_data = result.get('audio_data')
+            
+            # Validate audio data exists and is not empty
+            if not audio_data:
+                logger.error(f"❌ [AUDIO SAVE] audio_data is None or missing in result!")
+                logger.error(f"❌ [AUDIO SAVE] Result keys: {list(result.keys())}")
+                raise ValueError("Audio data is missing from TTS result")
+            
+            if len(audio_data) == 0:
+                logger.error(f"❌ [AUDIO SAVE] audio_data is empty (0 bytes)!")
+                raise ValueError("Audio data is empty")
+            
+            logger.info(f"✅ [AUDIO SAVE] Audio data validated: {len(audio_data)} bytes")
             
             # Check if audio is already MP3 or convert it
             audio_format = result.get('audio_format', result.get('format', 'wav'))
-            logger.info(f"📊 Audio format from TTS: {audio_format}")
+            logger.info(f"📊 [AUDIO SAVE] Audio format from TTS: {audio_format}")
             
             # Save audio file
+            logger.info(f"💾 [AUDIO SAVE] Attempting to save audio file: {audio_path}")
+            logger.info(f"💾 [AUDIO SAVE] File absolute path: {os.path.abspath(audio_path)}")
+            
             if audio_format.lower() in ['mp3', 'audio/mpeg']:
                 # Already MP3, save directly
-                with open(audio_path, 'wb') as f:
-                    f.write(audio_data)
-                logger.info(f"✅ AI audio file saved as MP3: {audio_path}")
-                audio_filename = f"ai_response_{session_id}_{int(time.time())}.mp3"
+                logger.info(f"💾 [AUDIO SAVE] Audio is already MP3, saving directly...")
+                try:
+                    with open(audio_path, 'wb') as f:
+                        bytes_written = f.write(audio_data)
+                    logger.info(f"✅ [AUDIO SAVE] AI audio file saved as MP3: {audio_path}")
+                    logger.info(f"✅ [AUDIO SAVE] Bytes written: {bytes_written} (expected: {len(audio_data)})")
+                    
+                    # Verify file was written
+                    if os.path.exists(audio_path):
+                        file_size = os.path.getsize(audio_path)
+                        logger.info(f"✅ [AUDIO SAVE] File verified: {file_size} bytes")
+                        if file_size != len(audio_data):
+                            logger.warning(f"⚠️ [AUDIO SAVE] File size mismatch! Expected {len(audio_data)}, got {file_size}")
+                    else:
+                        logger.error(f"❌ [AUDIO SAVE] File does not exist after write attempt!")
+                    
+                    audio_filename = f"ai_response_{session_id}_{int(time.time())}.mp3"
+                except PermissionError as perm_error:
+                    logger.error(f"❌ [AUDIO SAVE] Permission denied writing to {audio_path}")
+                    logger.error(f"❌ [AUDIO SAVE] Error: {perm_error}")
+                    raise
+                except Exception as write_error:
+                    logger.error(f"❌ [AUDIO SAVE] Failed to write file: {write_error}")
+                    raise
             else:
                 # Convert to MP3 using ffmpeg
                 logger.info(f"🔄 Converting audio to MP3 format...")
@@ -408,8 +472,11 @@ def process_speech():
                     logger.info(f"✅ AI audio file saved in original format: {fallback_path}")
             
         except Exception as e:
-            logger.error(f"❌ Failed to save audio file: {e}")
-            logger.warning(f"⚠️ Continuing without saving audio file")
+            logger.error(f"❌ [AUDIO SAVE] Failed to save audio file: {e}")
+            logger.error(f"❌ [AUDIO SAVE] Error type: {type(e).__name__}")
+            import traceback
+            logger.error(f"❌ [AUDIO SAVE] Traceback: {traceback.format_exc()}")
+            logger.warning(f"⚠️ [AUDIO SAVE] Continuing without saving audio file")
             audio_filename = None
         
         response_data = {
@@ -425,8 +492,12 @@ def process_speech():
         # Add audioUrl only if we successfully saved the file
         if audio_filename:
             response_data["audioUrl"] = f"/data/ai/{audio_filename}"
+            logger.info(f"✅ [AUDIO SAVE] audioUrl added to response: {response_data['audioUrl']}")
         else:
-            logger.warning("⚠️ No audio file saved, skipping audioUrl in response")
+            logger.warning("⚠️ [AUDIO SAVE] No audio file saved, skipping audioUrl in response")
+            logger.warning(f"⚠️ [AUDIO SAVE] This means TTS failed or audio save failed - check logs above")
+            logger.warning(f"⚠️ [AUDIO SAVE] Result had audio_data: {bool(result.get('audio_data'))}")
+            logger.warning(f"⚠️ [AUDIO SAVE] Audio data length: {len(result.get('audio_data', b''))} bytes")
         
         return jsonify(response_data)
         
@@ -491,11 +562,14 @@ def synthesize_speech_endpoint():
             return jsonify({"error": f"TTS synthesis failed: {str(e)}"}), 500
         
         # Save AI audio to data/ai/ with timestamp (as MP3)
+        # Use absolute path to avoid issues with working directory
+        backend_dir = os.path.dirname(os.path.abspath(__file__))
+        data_ai_dir = os.path.join(backend_dir, 'data', 'ai')
         audio_filename = f"ai_tts_{int(time.time())}.mp3"
-        audio_path = os.path.join('data', 'ai', audio_filename)
+        audio_path = os.path.join(data_ai_dir, audio_filename)
         
         # Ensure AI audio directory exists
-        os.makedirs(os.path.dirname(audio_path), exist_ok=True)
+        os.makedirs(data_ai_dir, exist_ok=True)
         
         # Check if audio is already MP3 or convert it
         audio_format = tts_result.get('format', 'wav')
@@ -589,7 +663,9 @@ def serve_data_files(directory, filename):
             return jsonify({"error": "Invalid directory"}), 400
         
         # Construct the safe path
-        data_dir = os.path.join('data', directory)
+        # Use absolute path to avoid issues with working directory
+        backend_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(backend_dir, 'data', directory)
         
         if not os.path.exists(data_dir):
             return jsonify({"error": "Directory not found"}), 404
