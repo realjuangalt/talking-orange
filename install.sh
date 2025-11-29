@@ -86,12 +86,27 @@ $SUDO_CMD apt install -y \
 
 # Audio processing dependencies (for TTS and audio conversion)
 echo "🔊 Installing audio processing dependencies..."
-# Note: Package names are the same for Debian and Ubuntu
-$SUDO_CMD apt install -y \
-    libsndfile1-dev \
-    espeak \
-    festival \
-    libttspico-utils
+# Install common TTS engines (package names may differ between Debian/Ubuntu)
+if $SUDO_CMD apt install -y libsndfile1-dev espeak festival; then
+    echo "  ✅ Core TTS dependencies installed"
+else
+    echo "  ⚠️  Warning: Some TTS packages may have failed to install"
+fi
+
+# Try to install pico2wave - package name differs between Debian versions
+# Note: This package may not be available in all Debian/Ubuntu repositories
+echo "🔊 Installing pico2wave TTS engine (optional)..."
+if $SUDO_CMD apt install -y libttspico-utils >/dev/null 2>&1; then
+    echo "  ✅ libttspico-utils installed"
+elif $SUDO_CMD apt install -y tts-pico-utils >/dev/null 2>&1; then
+    echo "  ✅ tts-pico-utils installed"
+elif $SUDO_CMD apt install -y pico2wave >/dev/null 2>&1; then
+    echo "  ✅ pico2wave installed"
+else
+    echo "  ⚠️  pico2wave not available in current repositories"
+    echo "  ℹ️  This is optional - espeak and festival should still work"
+    echo "  ℹ️  If needed, you can try manually: apt install -y libttspico-utils"
+fi
 
 # OpenSSL and security libraries (required for building Python packages like torch)
 echo "🔒 Installing security libraries..."
@@ -227,9 +242,14 @@ fi
 if [ $TTS_MISSING -eq 1 ]; then
     echo ""
     echo "⚠️  WARNING: Some TTS engines are missing!"
-    echo "   The installation may have failed. Try running:"
-    echo "   Run as root: apt install -y espeak festival libttspico-utils"
-    echo "   Or with sudo: sudo apt install -y espeak festival libttspico-utils"
+    echo "   The installation may have failed. Try running manually:"
+    echo "   Run as root: apt install -y espeak festival"
+    echo "   For pico2wave, try: apt install -y libttspico-utils"
+    echo "   Or: apt install -y tts-pico-utils"
+    echo "   Or: apt install -y pico2wave"
+    echo ""
+    echo "   Note: At least one TTS engine (espeak, festival, or pico2wave) is required"
+    echo "   The system will work with just espeak or festival if pico2wave is unavailable"
 fi
 
 # Test Python backend (if available)
