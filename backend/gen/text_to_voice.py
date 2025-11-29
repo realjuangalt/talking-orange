@@ -159,9 +159,18 @@ class TextToVoiceService:
         
         for engine in priority_engines:
             if engine in self.available_engines:
+                logger.info(f"🔊 [TTS] Selected engine from priority list: {engine}")
                 return engine
         
-        raise Exception("No TTS engines available")
+        # No engines available - log detailed error
+        logger.error(f"❌ [TTS] No TTS engines available!")
+        logger.error(f"❌ [TTS] Available engines list: {self.available_engines}")
+        logger.error(f"❌ [TTS] Priority engines checked: {priority_engines}")
+        logger.error(f"❌ [TTS] This means:")
+        logger.error(f"❌ [TTS]   - No local TTS engines installed (espeak, festival, pico2wave)")
+        logger.error(f"❌ [TTS]   - No cloud TTS API keys configured (VENICE_KEY, etc.)")
+        logger.error(f"❌ [TTS] Solution: Install TTS engines: sudo apt install espeak festival libttspico-utils")
+        raise Exception("No TTS engines available. Install with: sudo apt install espeak festival libttspico-utils")
     
     def _synthesize_local(self, text: str, engine: str, voice: str, language: str, 
                          speed: float, pitch: float) -> Dict[str, Any]:

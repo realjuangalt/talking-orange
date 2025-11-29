@@ -25,13 +25,53 @@ if [[ "$OSTYPE" != "linux-gnu"* ]]; then
     exit 1
 fi
 
+# Detect distribution (Debian or Ubuntu)
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    DISTRO=$ID
+    DISTRO_VERSION=$VERSION_ID
+    echo "🔍 Detected distribution: $DISTRO $DISTRO_VERSION"
+else
+    echo "⚠️  Could not detect distribution, assuming Debian/Ubuntu"
+    DISTRO="debian"
+fi
+
+# Verify it's Debian or Ubuntu
+if [[ "$DISTRO" != "debian" && "$DISTRO" != "ubuntu" ]]; then
+    echo "⚠️  This script is optimized for Debian/Ubuntu"
+    echo "   Detected: $DISTRO"
+    echo "   Continuing anyway, but some packages might not be available..."
+fi
+
+# Detect if running as root (no sudo/su needed) or regular user (need sudo or su)
+if [ "$EUID" -eq 0 ]; then
+    SUDO_CMD=""
+    echo "🔑 Running as root - no sudo/su needed"
+else
+    # Check if sudo is available
+    if command -v sudo &> /dev/null; then
+        SUDO_CMD="sudo"
+        echo "🔑 Running as regular user - will use sudo"
+    elif command -v su &> /dev/null; then
+        echo "⚠️  sudo not found, but su is available"
+        echo "   This script needs root privileges to install packages"
+        echo "   Please run as root using: su -"
+        echo "   Or install sudo first"
+        exit 1
+    else
+        echo "❌ Neither sudo nor su found"
+        echo "   This script needs root privileges to install packages"
+        exit 1
+    fi
+fi
+
 # Update package list
 echo "📦 Updating package list..."
-sudo apt update
+$SUDO_CMD apt update
 
 # Install MINIMAL system dependencies for runtime
 echo "🔧 Installing core system dependencies..."
-sudo apt install -y \
+$SUDO_CMD apt install -y \
     curl \
     wget \
     git \
@@ -46,7 +86,8 @@ sudo apt install -y \
 
 # Audio processing dependencies (for TTS and audio conversion)
 echo "🔊 Installing audio processing dependencies..."
-sudo apt install -y \
+# Note: Package names are the same for Debian and Ubuntu
+$SUDO_CMD apt install -y \
     libsndfile1-dev \
     espeak \
     festival \
@@ -54,9 +95,16 @@ sudo apt install -y \
 
 # OpenSSL and security libraries (required for building Python packages like torch)
 echo "🔒 Installing security libraries..."
-sudo apt install -y \
+$SUDO_CMD apt install -y \
     libssl-dev \
     libffi-dev
+
+# Additional dependencies that might be needed
+echo "📦 Installing additional runtime dependencies..."
+$SUDO_CMD apt install -y \
+    ca-certificates \
+    gnupg \
+    lsb-release
 
 # Create Python virtual environment
 echo "🐍 Setting up Python virtual environment..."
@@ -150,6 +198,39 @@ echo "✅ Verifying installation..."
 echo "Python version: $(python3 --version)"
 echo "FFmpeg version: $(ffmpeg -version 2>/dev/null | head -n 1 || echo 'Not found')"
 echo "espeak version: $(espeak --version 2>/dev/null || echo 'Not found')"
+echo "festival: $(which festival >/dev/null 2>&1 && echo 'Found' || echo 'Not found')"
+echo "pico2wave: $(which pico2wave >/dev/null 2>&1 && echo 'Found' || echo 'Not found')"
+
+# Verify TTS engines are installed
+echo ""
+echo "🔊 Verifying TTS engines..."
+TTS_MISSING=0
+if ! which espeak >/dev/null 2>&1; then
+    echo "  ❌ espeak NOT found"
+    TTS_MISSING=1
+else
+    echo "  ✅ espeak found"
+fi
+if ! which festival >/dev/null 2>&1; then
+    echo "  ❌ festival NOT found"
+    TTS_MISSING=1
+else
+    echo "  ✅ festival found"
+fi
+if ! which pico2wave >/dev/null 2>&1; then
+    echo "  ❌ pico2wave NOT found"
+    TTS_MISSING=1
+else
+    echo "  ✅ pico2wave found"
+fi
+
+if [ $TTS_MISSING -eq 1 ]; then
+    echo ""
+    echo "⚠️  WARNING: Some TTS engines are missing!"
+    echo "   The installation may have failed. Try running:"
+    echo "   Run as root: apt install -y espeak festival libttspico-utils"
+    echo "   Or with sudo: sudo apt install -y espeak festival libttspico-utils"
+fi
 
 # Test Python backend (if available)
 echo "🚀 Testing Python backend setup..."

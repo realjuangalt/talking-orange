@@ -105,9 +105,10 @@ talking-orange/
 ## 🚀 Getting Started
 
 ### Prerequisites
-- **Linux** (tested on Debian/Ubuntu)
+- **Linux** (Debian or Ubuntu - tested on both)
 - **Python 3.8+**
 - **FFmpeg** (for audio processing)
+- **TTS engines** (espeak, festival, pico2wave - installed by install.sh)
 - **Modern web browser** with camera/microphone support
 - **HTTPS or localhost** (required for camera access)
 
@@ -122,16 +123,25 @@ talking-orange/
 2. **Run installation script**
    ```bash
    chmod +x install.sh
+   # If you have sudo:
+   sudo ./install.sh
+   # Or if you use su (switch to root first):
+   su -
+   ./install.sh
+   # Or if already root:
    ./install.sh
    ```
 
    This will:
-   - Install system dependencies (FFmpeg, TTS engines, etc.)
+   - Install system dependencies (FFmpeg, TTS engines: espeak, festival, pico2wave)
    - Create Python virtual environment
    - Install Python packages
    - Download AR libraries
    - Create necessary directories
    - Set up `backend/models/` directory
+   - Verify TTS engines are installed
+
+   **Important:** The install script installs TTS engines (`espeak`, `festival`, `libttspico-utils`). If you see "No TTS engines available" errors, make sure you ran the full install script.
 
 3. **Configure environment** (optional)
    ```bash
@@ -358,6 +368,31 @@ chown -R $(whoami) backend/data
 
 # Check if directories exist
 ls -la backend/data/
+```
+
+### Install TTS Engines (If Missing)
+
+**If you see "No TTS engines available" error:**
+
+```bash
+# Check if TTS engines are installed
+which espeak festival pico2wave
+
+# If none are found, install them:
+sudo ./install_tts_engines.sh
+
+# Or manually:
+sudo apt update
+sudo apt install -y espeak festival libttspico-utils
+
+# Verify installation
+which espeak festival pico2wave
+```
+
+**After installing, restart the server:**
+```bash
+sudo systemctl restart talking-orange
+# or restart your Flask app manually
 ```
 
 ## 🔍 Troubleshooting
