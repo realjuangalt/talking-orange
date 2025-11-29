@@ -178,7 +178,7 @@ talking-orange/
 - ✅ Auto-reload on code changes
 - ✅ Model auto-download if missing
 
-#### Production Mode
+#### Production Mode (Legacy)
 ```bash
 ./start.sh
 ```
@@ -206,7 +206,11 @@ DEBUG=true                    # Enable Flask debug mode
 
 # Whisper Configuration
 WHISPER_MODEL_NAME=small      # small or medium
-WHISPER_FORCE_CPU=true        # Force CPU mode (true/false)
+WHISPER_FORCE_CPU=true        # Force CPU mode (true/false) - REQUIRED for CPU-only servers
+
+# TTS Configuration
+# TTS engines (espeak, festival, pico2wave) are CPU-based and don't need special config
+# They are automatically detected and used in priority order
 
 # Model Directory
 MODEL_DIR=./backend/models    # Where Whisper models are stored

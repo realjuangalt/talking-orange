@@ -72,7 +72,7 @@
     </style>
 </head>
 <body>
-    <a-scene mindar-image="imageTargetSrc: ./media/targets.mind; maxTrack: 1; missTolerance: 60; warmupTolerance: 5; filterMinCF: 0.00005; filterBeta: 5000; uiLoading: yes; uiScanning: yes; uiError: yes;" vr-mode-ui="enabled: false" xr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="antialias: true; physicallyCorrectLights: false">
+    <a-scene mindar-image="imageTargetSrc: ./media/targets.mind; maxTrack: 1; missTolerance: 80; warmupTolerance: 8; filterMinCF: 0.00001; filterBeta: 10000; uiLoading: yes; uiScanning: yes; uiError: yes;" vr-mode-ui="enabled: false" xr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="antialias: true; physicallyCorrectLights: false">
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
         <a-assets>
             <!-- Images for idle state -->
@@ -603,10 +603,10 @@
                         const imgId = img.id || img.getAttribute('id');
                         if (imgId) {
                             this.orangePlane.setAttribute('src', `#${imgId}`);
-                            // Force geometry back to 1x1 after src is set (A-Frame might change it)
-                            setTimeout(() => {
-                                this.orangePlane.setAttribute('geometry', { width: 1, height: 1 });
-                            }, 10);
+                        // Force geometry back to 1x1 after src is set (A-Frame might change it)
+                        setTimeout(() => {
+                            this.orangePlane.setAttribute('geometry', { width: 1, height: 1 });
+                        }, 10);
                         } else {
                             console.error('❌ Cannot set src: image has no ID');
                         }
@@ -704,20 +704,20 @@
                             return;
                         }
                         
-                        const winkImg = document.querySelector('img[id="talking-orange-wink"]');
+                    const winkImg = document.querySelector('img[id="talking-orange-wink"]');
                         if (winkImg && winkImg.complete) {
-                            this.recreateMaterial(winkImg);
-                            // Return to smile after 1 second
-                            setTimeout(() => {
-                                const smileImg = document.querySelector('img[id="talking-orange"]');
+                        this.recreateMaterial(winkImg);
+                        // Return to smile after 1 second
+                        setTimeout(() => {
+                            const smileImg = document.querySelector('img[id="talking-orange"]');
                                 if (smileImg && smileImg.complete) {
-                                    this.recreateMaterial(smileImg);
-                                    console.log('😊 Returned to smile after wink confirmation');
-                                }
-                            }, 1000);
-                        } else {
+                                this.recreateMaterial(smileImg);
+                                console.log('😊 Returned to smile after wink confirmation');
+                            }
+                        }, 1000);
+                    } else {
                             console.warn('⚠️ Wink image not found or not loaded yet');
-                        }
+                    }
                     };
                     
                     // Start checking after a short delay to ensure A-Frame is ready
@@ -1680,19 +1680,39 @@
                     });
                     
                     const fetchStartTime = performance.now();
-                    const response = await fetch('/api/speech/process', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            audioData: audioData,
-                            sessionId: sessionId,
-                            language: currentLanguage,
-                            ttsVoice: 'default',
-                            ttsEngine: 'auto'
-                        })
-                    });
+                    
+                    // Add timeout to prevent hanging
+                    const timeoutMs = 120000; // 2 minutes timeout
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => {
+                        controller.abort();
+                        console.error('❌ [API TIMEOUT] Request timed out after ' + timeoutMs + 'ms');
+                    }, timeoutMs);
+                    
+                    let response;
+                    try {
+                        response = await fetch('/api/speech/process', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                audioData: audioData,
+                                sessionId: sessionId,
+                                language: currentLanguage,
+                                ttsVoice: 'default',
+                                ttsEngine: 'auto'
+                            }),
+                            signal: controller.signal
+                        });
+                        clearTimeout(timeoutId);
+                    } catch (fetchError) {
+                        clearTimeout(timeoutId);
+                        if (fetchError.name === 'AbortError') {
+                            throw new Error('Request timed out after ' + timeoutMs + 'ms - backend may be unresponsive');
+                        }
+                        throw new Error('Network error: ' + fetchError.message);
+                    }
                     
                     const fetchEndTime = performance.now();
                     const fetchDuration = (fetchEndTime - fetchStartTime).toFixed(0);
@@ -1759,10 +1779,16 @@
                     console.error('❌ [API ERROR] Voice processing failed after ' + errorDuration + 'ms', {
                         error: error,
                         errorMessage: error.message,
+                        errorName: error.name,
                         errorStack: error.stack,
                         timestamp: new Date().toISOString(),
                         sessionId: sessionId
                     });
+                    
+                    // Stop thinking animation on error
+                    if (window.talkingAnimationModule) {
+                        window.talkingAnimationModule.stopThinkingAnimation();
+                    }
                     alert('Error processing voice input: ' + error.message);
                 }
             }
@@ -2003,11 +2029,30 @@
             };
             
             if (marker) {
-                // Add smoothing variables - simple direct smoothing (no averaging needed)
+                // Enhanced smoothing with frame averaging and dead zone filtering
                 let lastPosition = { x: 0, y: 0, z: 0 };
                 let lastRotation = { x: 0, y: 0, z: 0 };
-                let smoothingFactor = 0.1; // More aggressive smoothing (lower = more stable, less jitter)
-                let rotationSmoothing = 0.08; // Very aggressive rotation smoothing to reduce wobble
+                
+                // Much more aggressive smoothing to eliminate wobble
+                let smoothingFactor = 0.05; // Very aggressive smoothing (lower = more stable, less jitter)
+                let rotationSmoothing = 0.04; // Extremely aggressive rotation smoothing
+                
+                // Frame averaging buffer for additional stability
+                const POSITION_BUFFER_SIZE = 5; // Average over 5 frames
+                const ROTATION_BUFFER_SIZE = 5;
+                let positionBuffer = [];
+                let rotationBuffer = [];
+                
+                // Dead zone filtering - ignore tiny movements (likely autofocus wobble)
+                const POSITION_DEAD_ZONE = 0.0005; // Ignore movements smaller than this (in meters)
+                const ROTATION_DEAD_ZONE = 0.1; // Ignore rotations smaller than this (in degrees)
+                
+                // Velocity-based filtering - filter out sudden high-velocity changes
+                let lastVelocity = { x: 0, y: 0, z: 0 };
+                let lastRotationVelocity = { x: 0, y: 0, z: 0 };
+                const MAX_VELOCITY = 0.01; // Maximum allowed velocity per frame (m/frame)
+                const MAX_ROTATION_VELOCITY = 2.0; // Maximum allowed rotation velocity (deg/frame)
+                
                 let trackingStability = 0; // Track how stable tracking is (0-1)
                 let consecutiveFrames = 0; // Count consecutive successful tracking frames
                 
@@ -2049,10 +2094,10 @@
                     // Increase smoothing as tracking becomes more stable
                     if (consecutiveFrames > MIN_STABLE_FRAMES) {
                         trackingStability = Math.min(1.0, trackingStability + 0.1);
-                        // Gradually reduce smoothing factor for more responsive tracking once stable
-                        // But keep it more aggressive than before for less wobble
-                        smoothingFactor = Math.max(0.08, 0.15 - (trackingStability * 0.05));
-                        rotationSmoothing = Math.max(0.05, 0.12 - (trackingStability * 0.05));
+                        // Keep very aggressive smoothing even when stable to eliminate wobble
+                        // Only slightly reduce smoothing for minimal responsiveness
+                        smoothingFactor = Math.max(0.04, 0.06 - (trackingStability * 0.01));
+                        rotationSmoothing = Math.max(0.03, 0.05 - (trackingStability * 0.01));
                     }
                     
                     // Less verbose logging - only log every 60 frames or milestones
@@ -2205,26 +2250,73 @@
                             };
                             const rawDeltaMagnitude = Math.sqrt(rawDelta.x**2 + rawDelta.y**2 + rawDelta.z**2);
                             
-                            // Direct smoothing: interpolate between last smoothed position and current raw position
-                            // Use adaptive smoothing - more aggressive when unstable, less when stable
-                            // Always use aggressive smoothing to reduce wobble
-                            const adaptiveSmoothing = isTargetVisible && consecutiveFrames > MIN_STABLE_FRAMES 
-                                ? smoothingFactor 
-                                : smoothingFactor * 2.0; // Much more smoothing when unstable (startup)
-                            
-                            const smoothedPos = {
-                                x: lastPosition.x + (current.x - lastPosition.x) * adaptiveSmoothing,
-                                y: lastPosition.y + (current.y - lastPosition.y) * adaptiveSmoothing,
-                                z: lastPosition.z + (current.z - lastPosition.z) * adaptiveSmoothing
+                            // Calculate velocity (change per frame)
+                            const velocity = {
+                                x: current.x - lastPosition.x,
+                                y: current.y - lastPosition.y,
+                                z: current.z - lastPosition.z
                             };
+                            const velocityMagnitude = Math.sqrt(velocity.x**2 + velocity.y**2 + velocity.z**2);
+                            
+                            // Velocity-based filtering: reject sudden high-velocity changes (likely noise)
+                            let filteredCurrent = { ...current };
+                            if (velocityMagnitude > MAX_VELOCITY) {
+                                // Clamp velocity to maximum allowed
+                                const scale = MAX_VELOCITY / velocityMagnitude;
+                                filteredCurrent = {
+                                    x: lastPosition.x + velocity.x * scale,
+                                    y: lastPosition.y + velocity.y * scale,
+                                    z: lastPosition.z + velocity.z * scale
+                                };
+                            }
+                            
+                            // Add to frame buffer for averaging
+                            positionBuffer.push(filteredCurrent);
+                            if (positionBuffer.length > POSITION_BUFFER_SIZE) {
+                                positionBuffer.shift();
+                            }
+                            
+                            // Calculate averaged position from buffer
+                            const avgPosition = {
+                                x: positionBuffer.reduce((sum, p) => sum + p.x, 0) / positionBuffer.length,
+                                y: positionBuffer.reduce((sum, p) => sum + p.y, 0) / positionBuffer.length,
+                                z: positionBuffer.reduce((sum, p) => sum + p.z, 0) / positionBuffer.length
+                            };
+                            
+                            // Dead zone filtering: ignore movements smaller than threshold
+                            const deltaFromLast = {
+                                x: avgPosition.x - lastPosition.x,
+                                y: avgPosition.y - lastPosition.y,
+                                z: avgPosition.z - lastPosition.z
+                            };
+                            const deltaMagnitude = Math.sqrt(deltaFromLast.x**2 + deltaFromLast.y**2 + deltaFromLast.z**2);
+                            
+                            // Apply dead zone - if movement is too small, don't update
+                            let finalPosition = lastPosition;
+                            let adaptiveSmoothing = smoothingFactor; // Default value
+                            if (deltaMagnitude >= POSITION_DEAD_ZONE) {
+                                // Use very aggressive smoothing with averaged position
+                                adaptiveSmoothing = isTargetVisible && consecutiveFrames > MIN_STABLE_FRAMES 
+                                ? smoothingFactor 
+                                    : smoothingFactor * 2.0; // Much more smoothing when unstable (startup)
+                                
+                                finalPosition = {
+                                    x: lastPosition.x + (avgPosition.x - lastPosition.x) * adaptiveSmoothing,
+                                    y: lastPosition.y + (avgPosition.y - lastPosition.y) * adaptiveSmoothing,
+                                    z: lastPosition.z + (avgPosition.z - lastPosition.z) * adaptiveSmoothing
+                                };
+                            }
                             
                             // Calculate smoothed delta
                             const smoothedDelta = {
-                                x: smoothedPos.x - lastPosition.x,
-                                y: smoothedPos.y - lastPosition.y,
-                                z: smoothedPos.z - lastPosition.z
+                                x: finalPosition.x - lastPosition.x,
+                                y: finalPosition.y - lastPosition.y,
+                                z: finalPosition.z - lastPosition.z
                             };
                             const smoothedDeltaMagnitude = Math.sqrt(smoothedDelta.x**2 + smoothedDelta.y**2 + smoothedDelta.z**2);
+                            
+                            // Update velocity for next frame
+                            lastVelocity = velocity;
                             
                             // Track deltas for analysis
                             if (positionDeltas.length >= MAX_DELTA_HISTORY) {
@@ -2237,8 +2329,8 @@
                                 timestamp: performance.now()
                             });
                             
-                            lastPosition = smoothedPos;
-                            marker.setAttribute('position', `${smoothedPos.x} ${smoothedPos.y} ${smoothedPos.z}`);
+                            lastPosition = finalPosition;
+                            marker.setAttribute('position', `${finalPosition.x} ${finalPosition.y} ${finalPosition.z}`);
                             
                             // Log position data periodically
                             positionLogCount++;
@@ -2249,9 +2341,12 @@
                                 
                                 console.log(`📍 Position [Frame ${consecutiveFrames}]`, {
                                     raw: `(${current.x.toFixed(4)}, ${current.y.toFixed(4)}, ${current.z.toFixed(4)})`,
-                                    smoothed: `(${smoothedPos.x.toFixed(4)}, ${smoothedPos.y.toFixed(4)}, ${smoothedPos.z.toFixed(4)})`,
+                                    averaged: `(${avgPosition.x.toFixed(4)}, ${avgPosition.y.toFixed(4)}, ${avgPosition.z.toFixed(4)})`,
+                                    smoothed: `(${finalPosition.x.toFixed(4)}, ${finalPosition.y.toFixed(4)}, ${finalPosition.z.toFixed(4)})`,
                                     rawDelta: rawDeltaMagnitude.toFixed(6),
+                                    velocity: velocityMagnitude.toFixed(6),
                                     smoothedDelta: smoothedDeltaMagnitude.toFixed(6),
+                                    deadZoneFiltered: deltaMagnitude < POSITION_DEAD_ZONE,
                                     smoothing: adaptiveSmoothing.toFixed(4),
                                     stability: `${(trackingStability * 100).toFixed(0)}%`,
                                     avgRawDelta: avgRawDelta.toFixed(6),
@@ -2309,25 +2404,73 @@
                             rawDelta.z = normalizeAngle(rawDelta.z);
                             const rawDeltaMagnitude = Math.sqrt(rawDelta.x**2 + rawDelta.y**2 + rawDelta.z**2);
                             
-                            // Direct rotation smoothing with adaptive factor
-                            // Use very aggressive rotation smoothing to eliminate wobble
-                            const adaptiveRotationSmoothing = isTargetVisible && consecutiveFrames > MIN_STABLE_FRAMES 
-                                ? rotationSmoothing 
-                                : rotationSmoothing * 2.5; // Much more smoothing when unstable (startup)
-                            
-                            const smoothedRot = {
-                                x: lastRotation.x + (current.x - lastRotation.x) * adaptiveRotationSmoothing,
-                                y: lastRotation.y + (current.y - lastRotation.y) * adaptiveRotationSmoothing,
-                                z: lastRotation.z + (current.z - lastRotation.z) * adaptiveRotationSmoothing
+                            // Calculate rotation velocity (change per frame)
+                            const rotationVelocity = {
+                                x: normalizeAngle(current.x - lastRotation.x),
+                                y: normalizeAngle(current.y - lastRotation.y),
+                                z: normalizeAngle(current.z - lastRotation.z)
                             };
+                            const rotationVelocityMagnitude = Math.sqrt(rotationVelocity.x**2 + rotationVelocity.y**2 + rotationVelocity.z**2);
+                            
+                            // Velocity-based filtering: reject sudden high-velocity changes (likely noise)
+                            let filteredCurrent = { ...current };
+                            if (rotationVelocityMagnitude > MAX_ROTATION_VELOCITY) {
+                                // Clamp velocity to maximum allowed
+                                const scale = MAX_ROTATION_VELOCITY / rotationVelocityMagnitude;
+                                filteredCurrent = {
+                                    x: normalizeAngle(lastRotation.x + rotationVelocity.x * scale),
+                                    y: normalizeAngle(lastRotation.y + rotationVelocity.y * scale),
+                                    z: normalizeAngle(lastRotation.z + rotationVelocity.z * scale)
+                                };
+                            }
+                            
+                            // Add to frame buffer for averaging
+                            rotationBuffer.push(filteredCurrent);
+                            if (rotationBuffer.length > ROTATION_BUFFER_SIZE) {
+                                rotationBuffer.shift();
+                            }
+                            
+                            // Calculate averaged rotation from buffer
+                            const avgRotation = {
+                                x: rotationBuffer.reduce((sum, r) => sum + normalizeAngle(r.x), 0) / rotationBuffer.length,
+                                y: rotationBuffer.reduce((sum, r) => sum + normalizeAngle(r.y), 0) / rotationBuffer.length,
+                                z: rotationBuffer.reduce((sum, r) => sum + normalizeAngle(r.z), 0) / rotationBuffer.length
+                            };
+                            
+                            // Dead zone filtering: ignore rotations smaller than threshold
+                            const deltaFromLast = {
+                                x: normalizeAngle(avgRotation.x - lastRotation.x),
+                                y: normalizeAngle(avgRotation.y - lastRotation.y),
+                                z: normalizeAngle(avgRotation.z - lastRotation.z)
+                            };
+                            const deltaMagnitude = Math.sqrt(deltaFromLast.x**2 + deltaFromLast.y**2 + deltaFromLast.z**2);
+                            
+                            // Apply dead zone - if rotation is too small, don't update
+                            let finalRotation = lastRotation;
+                            let adaptiveRotationSmoothing = rotationSmoothing; // Default value
+                            if (deltaMagnitude >= ROTATION_DEAD_ZONE) {
+                                // Use very aggressive smoothing with averaged rotation
+                                adaptiveRotationSmoothing = isTargetVisible && consecutiveFrames > MIN_STABLE_FRAMES 
+                                ? rotationSmoothing 
+                                    : rotationSmoothing * 2.5; // Much more smoothing when unstable (startup)
+                                
+                                finalRotation = {
+                                    x: normalizeAngle(lastRotation.x + normalizeAngle(avgRotation.x - lastRotation.x) * adaptiveRotationSmoothing),
+                                    y: normalizeAngle(lastRotation.y + normalizeAngle(avgRotation.y - lastRotation.y) * adaptiveRotationSmoothing),
+                                    z: normalizeAngle(lastRotation.z + normalizeAngle(avgRotation.z - lastRotation.z) * adaptiveRotationSmoothing)
+                                };
+                            }
                             
                             // Calculate smoothed delta
                             const smoothedDelta = {
-                                x: smoothedRot.x - lastRotation.x,
-                                y: smoothedRot.y - lastRotation.y,
-                                z: smoothedRot.z - lastRotation.z
+                                x: normalizeAngle(finalRotation.x - lastRotation.x),
+                                y: normalizeAngle(finalRotation.y - lastRotation.y),
+                                z: normalizeAngle(finalRotation.z - lastRotation.z)
                             };
                             const smoothedDeltaMagnitude = Math.sqrt(smoothedDelta.x**2 + smoothedDelta.y**2 + smoothedDelta.z**2);
+                            
+                            // Update rotation velocity for next frame
+                            lastRotationVelocity = rotationVelocity;
                             
                             // Track deltas for analysis
                             if (rotationDeltas.length >= MAX_DELTA_HISTORY) {
@@ -2340,8 +2483,8 @@
                                 timestamp: performance.now()
                             });
                             
-                            lastRotation = smoothedRot;
-                            marker.setAttribute('rotation', `${smoothedRot.x} ${smoothedRot.y} ${smoothedRot.z}`);
+                            lastRotation = finalRotation;
+                            marker.setAttribute('rotation', `${finalRotation.x} ${finalRotation.y} ${finalRotation.z}`);
                             
                             // Log rotation data periodically
                             rotationLogCount++;
@@ -2352,9 +2495,12 @@
                                 
                                 console.log(`🔄 Rotation [Frame ${consecutiveFrames}]`, {
                                     raw: `(${current.x.toFixed(2)}°, ${current.y.toFixed(2)}°, ${current.z.toFixed(2)}°)`,
-                                    smoothed: `(${smoothedRot.x.toFixed(2)}°, ${smoothedRot.y.toFixed(2)}°, ${smoothedRot.z.toFixed(2)}°)`,
+                                    averaged: `(${avgRotation.x.toFixed(2)}°, ${avgRotation.y.toFixed(2)}°, ${avgRotation.z.toFixed(2)}°)`,
+                                    smoothed: `(${finalRotation.x.toFixed(2)}°, ${finalRotation.y.toFixed(2)}°, ${finalRotation.z.toFixed(2)}°)`,
                                     rawDelta: `${rawDeltaMagnitude.toFixed(4)}°`,
+                                    velocity: `${rotationVelocityMagnitude.toFixed(4)}°`,
                                     smoothedDelta: `${smoothedDeltaMagnitude.toFixed(4)}°`,
+                                    deadZoneFiltered: deltaMagnitude < ROTATION_DEAD_ZONE,
                                     smoothing: adaptiveRotationSmoothing.toFixed(4),
                                     stability: `${(trackingStability * 100).toFixed(0)}%`,
                                     avgRawDelta: `${avgRawDelta.toFixed(4)}°`,

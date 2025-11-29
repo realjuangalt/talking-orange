@@ -188,6 +188,7 @@ class TextToVoiceService:
             
             # Build command based on engine
             if engine == "local_espeak":
+                # espeak outputs WAV to stdout when using --stdout
                 cmd = [
                     'espeak', 
                     '-v', f'{language}', 
@@ -195,16 +196,52 @@ class TextToVoiceService:
                     '-p', str(int(50 * pitch)),
                     '--stdout'
                 ]
+                # espeak needs text via stdin or as argument
+                logger.info(f"🔊 [TTS LOCAL] Executing espeak command: {' '.join(cmd)}")
+                result = subprocess.run(
+                    cmd, 
+                    input=text.encode('utf-8'),
+                    capture_output=True, 
+                    timeout=30
+                )
+                if result.returncode == 0:
+                    with open(output_path, 'wb') as f:
+                        f.write(result.stdout)
+                else:
+                    logger.error(f"❌ [TTS LOCAL] espeak stderr: {result.stderr.decode('utf-8', errors='ignore')}")
+                    raise Exception(f"espeak command failed: {result.stderr.decode('utf-8', errors='ignore')}")
                 
             elif engine == "local_festival":
-                cmd = ['festival', '--tts', '--language', language]
+                # festival reads from stdin
+                cmd = ['festival', '--tts']
+                logger.info(f"🔊 [TTS LOCAL] Executing festival command: {' '.join(cmd)}")
+                result = subprocess.run(
+                    cmd,
+                    input=text.encode('utf-8'),
+                    capture_output=True,
+                    timeout=30
+                )
+                if result.returncode == 0:
+                    # festival outputs raw audio to stdout
+                    with open(output_path, 'wb') as f:
+                        f.write(result.stdout)
+                else:
+                    logger.error(f"❌ [TTS LOCAL] festival stderr: {result.stderr.decode('utf-8', errors='ignore')}")
+                    raise Exception(f"festival command failed: {result.stderr.decode('utf-8', errors='ignore')}")
                 
             elif engine == "local_pico2wave":
+                # pico2wave writes directly to file
                 cmd = [
                     'pico2wave', 
-                    '--lang', language.split('-')[0], 
-                    '--wave', output_path
+                    '--lang', language.split('-')[0] if '-' in language else language, 
+                    '--wave', output_path,
+                    text  # Text as separate argument, not quoted
                 ]
+                logger.info(f"🔊 [TTS LOCAL] Executing pico2wave command: {' '.join(cmd[:4])} [text]")
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                if result.returncode != 0:
+                    logger.error(f"❌ [TTS LOCAL] pico2wave stderr: {result.stderr}")
+                    raise Exception(f"pico2wave command failed: {result.stderr}")
                 
             elif engine == "local_gtts":
                 # Use gTTS Python library
@@ -212,23 +249,6 @@ class TextToVoiceService:
             
             else:
                 raise ValueError(f"Unknown local engine: {engine}")
-            
-            # Execute command
-            if engine == "local_pico2wave":
-                # pico2wave writes directly to file
-                cmd.append(f'"{text}"')
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            else:
-                # Other engines output to stdout
-                cmd.append(f'"{text}"')
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                
-                if result.returncode == 0:
-                    # Write stdout to file
-                    with open(output_path, 'wb') as f:
-                        f.write(result.stdout)
-                else:
-                    raise Exception(f"TTS command failed: {result.stderr}")
             
             # Read generated audio
             if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
