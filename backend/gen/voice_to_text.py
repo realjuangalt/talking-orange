@@ -35,10 +35,39 @@ class VoiceToTextService:
         force_cpu = os.getenv('WHISPER_FORCE_CPU', 'false').lower() == 'true'
         if force_cpu:
             self.device = "cpu"
-            logger.info("CPU mode forced via WHISPER_FORCE_CPU environment variable")
+            logger.info("🔧 CPU mode forced via WHISPER_FORCE_CPU environment variable")
         else:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            cuda_available = torch.cuda.is_available()
+            if cuda_available:
+                self.device = "cuda"
+                cuda_device_count = torch.cuda.device_count()
+                cuda_device_name = torch.cuda.get_device_name(0) if cuda_device_count > 0 else "Unknown"
+                logger.info(f"🚀 GPU mode enabled - CUDA available")
+                logger.info(f"   CUDA devices: {cuda_device_count}")
+                logger.info(f"   GPU device: {cuda_device_name}")
+                
+                # Check GPU memory availability
+                try:
+                    for i in range(cuda_device_count):
+                        props = torch.cuda.get_device_properties(i)
+                        total_mem = props.total_memory / (1024**3)  # GB
+                        allocated = torch.cuda.memory_allocated(i) / (1024**3)  # GB
+                        reserved = torch.cuda.memory_reserved(i) / (1024**3)  # GB
+                        free = total_mem - reserved
+                        logger.info(f"   GPU {i} memory: {total_mem:.2f} GB total, {reserved:.2f} GB reserved, {free:.2f} GB free")
+                        
+                        # Warn if less than 1GB free (Whisper models need ~1-2GB)
+                        if free < 1.0:
+                            logger.warning(f"⚠️  GPU {i} has low free memory ({free:.2f} GB) - may fail to load model")
+                            logger.warning(f"   Consider: 1) Free GPU memory, 2) Use smaller model, 3) Use CPU mode")
+                except Exception as mem_error:
+                    logger.warning(f"⚠️  Could not check GPU memory: {mem_error}")
+            else:
+                self.device = "cpu"
+                logger.warning("⚠️  GPU requested but CUDA not available - falling back to CPU")
+                logger.info("   Install PyTorch with CUDA support to use GPU")
         self.use_fp16 = self.device == "cuda"
+        logger.info(f"🎯 Whisper will use device: {self.device} (FP16: {self.use_fp16})")
         
         # Ensure model directory exists
         os.makedirs(self.model_dir, exist_ok=True)
@@ -123,7 +152,19 @@ class VoiceToTextService:
                     logger.info(f"✅ Whisper model '{self.model_name}' loaded from cache in {load_duration:.1f}s")
                     
             except Exception as e:
+                error_str = str(e)
                 logger.warning(f"⚠️ Failed to load Whisper on {self.device}: {e}")
+                
+                # Check if it's a CUDA out of memory error
+                if "CUDA out of memory" in error_str or "out of memory" in error_str.lower():
+                    logger.error("❌ CUDA Out of Memory Error")
+                    logger.error("   The GPU doesn't have enough free memory to load the Whisper model")
+                    logger.error("   Solutions:")
+                    logger.error("   1. Free GPU memory (close other GPU applications)")
+                    logger.error("   2. Use a smaller model (small instead of medium)")
+                    logger.error("   3. Use CPU mode: ./start_local.sh --device cpu")
+                    logger.error("   4. Clear GPU cache: python3 -c 'import torch; torch.cuda.empty_cache()'")
+                
                 logger.info("🔄 Attempting to load on CPU as fallback...")
                 self.device = "cpu"
                 self.use_fp16 = False
@@ -152,12 +193,13 @@ class VoiceToTextService:
                 file_size = os.path.getsize(model_path) / (1024 * 1024)
                 logger.info(f"✅ Whisper model '{self.model_name}' initialized successfully")
                 logger.info(f"   Model file: {model_path} ({file_size:.1f} MB)")
+                logger.info(f"   Device: {self.device.upper()} ({'FP16 enabled' if self.use_fp16 else 'FP32'})")
+                if self.device == "cuda":
+                    logger.info(f"   GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'Unknown'}")
             else:
                 logger.warning(f"⚠️ Model file not found at expected path: {model_path}")
                 logger.info(f"   Model may be in Whisper's default cache location")
-            
-            logger.info(f"   Device: {self.device}")
-            logger.info(f"   FP16: {self.use_fp16}")
+                logger.info(f"   Device: {self.device.upper()} ({'FP16 enabled' if self.use_fp16 else 'FP32'})")
             
             return True
             

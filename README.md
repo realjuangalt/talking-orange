@@ -474,6 +474,163 @@ This is a private project. For issues or questions, contact the maintainer.
 
 ---
 
-**Last Updated:** 2024
+## 📊 Project Status & Next Steps
+
+### ✅ Completed Today (2025-11-29)
+
+1. **AR Tracking Stability Improvements**
+   - Enhanced smoothing with frame averaging (5-frame buffer)
+   - Added dead zone filtering (0.0005m position, 0.1° rotation)
+   - Implemented velocity-based filtering to reject noise
+   - Adjusted MindAR parameters for better stability:
+     - `missTolerance`: 60 → 80
+     - `warmupTolerance`: 5 → 8
+     - `filterMinCF`: 0.00005 → 0.00001
+     - `filterBeta`: 5000 → 10000
+   - Result: Significantly reduced wobble from autofocus and camera noise
+
+2. **TTS Engine Fixes**
+   - Fixed espeak command execution (now uses stdin properly)
+   - Fixed festival command execution (now uses stdin properly)
+   - Fixed pico2wave text argument handling
+   - Added comprehensive error logging for TTS failures
+   - Improved engine selection priority (local CPU engines first)
+
+3. **API & Network Improvements**
+   - Added 2-minute timeout to API requests (prevents hanging)
+   - Enhanced error handling for network failures
+   - Better error logging with timeout detection
+   - Automatic thinking animation stop on API errors
+
+4. **Installation & Configuration**
+   - Fixed install script for Debian/Ubuntu compatibility
+   - Added root/sudo/su detection for package installation
+   - Improved TTS engine installation handling
+   - Fixed virtual environment path in start.sh
+
+### 🐛 Current Issues
+
+#### 🔴 Critical: Server TTS Not Working
+**Problem:** TTS synthesis is failing on the server despite engines being installed.
+
+**Symptoms:**
+- Audio requests sent but no response
+- Thinking animation loops indefinitely waiting for response
+- No error logs visible (may be failing silently)
+
+**Possible Causes:**
+- TTS command execution failing (permissions, path issues)
+- Audio file save permissions
+- TTS engine not properly detected
+- Backend not responding to requests
+
+**Next Steps:**
+1. Check server logs for TTS errors
+2. Verify TTS engines are in PATH: `which espeak festival pico2wave`
+3. Test TTS manually on server: `echo "test" | espeak --stdout > test.wav`
+4. Check audio save permissions: `python3 backend/check_audio_permissions.py`
+5. Review backend logs when API request arrives
+
+#### 🔴 Critical: Massive Lag Between Voice Input and Response
+**Problem:** Very long delay (minutes) between voice input and text response.
+
+**Symptoms:**
+- User records audio → thinking animation starts
+- Thinking animation loops for 2+ minutes
+- No response received (or very delayed)
+
+**Root Cause:** Likely Whisper transcription speed on CPU
+- Small model on CPU can take 30-60+ seconds for short audio
+- Medium model would be even slower
+- No progress feedback to user
+
+**Next Steps:**
+1. **Optimize Whisper for CPU:**
+   - Verify using `small` model (not medium)
+   - Check if `WHISPER_FORCE_CPU=true` is set
+   - Consider using `base` model (faster, less accurate)
+   - Add progress logging during transcription
+
+2. **Add User Feedback:**
+   - Show "Processing..." message during transcription
+   - Display estimated time remaining
+   - Add progress indicator
+
+3. **Optimize Audio Processing:**
+   - Reduce audio sample rate if too high
+   - Trim silence from audio before sending
+   - Compress audio more aggressively
+
+4. **Consider Alternatives:**
+   - Use faster STT service for quick responses
+   - Implement streaming transcription if possible
+   - Cache common phrases/responses
+
+### 📋 Immediate Action Items
+
+**Priority 1: Fix TTS on Server**
+```bash
+# On server, check TTS engines
+which espeak festival pico2wave
+
+# Test TTS manually
+echo "test" | espeak --stdout > /tmp/test.wav
+festival --tts <<< "test"
+pico2wave --lang en --wave /tmp/test.wav "test"
+
+# Check backend logs
+tail -f talk.log  # or wherever logs are
+```
+
+**Priority 2: Reduce Whisper Latency**
+- Verify model size: Check `WHISPER_MODEL_NAME=small` in .env
+- Add transcription progress logging
+- Consider using `base` model for faster responses
+- Add timeout/fallback for slow transcriptions
+
+**Priority 3: Improve User Experience**
+- Add "Processing audio..." UI feedback
+- Show estimated wait time
+- Add cancel button for long-running requests
+- Implement request queuing to prevent multiple simultaneous requests
+
+### 🔧 Configuration Checklist
+
+**Server Configuration:**
+- [ ] `WHISPER_FORCE_CPU=true` in .env
+- [ ] `WHISPER_MODEL_NAME=small` in .env (or `base` for speed)
+- [ ] TTS engines installed and in PATH
+- [ ] Audio save directories have write permissions
+- [ ] Backend server is running and accessible
+
+**Performance Settings:**
+- [ ] Using small Whisper model (not medium)
+- [ ] CPU mode forced (no GPU detection overhead)
+- [ ] TTS using fastest local engine (espeak)
+- [ ] Audio compression optimized
+
+### 📈 Performance Targets
+
+**Current:**
+- Voice input → Response: **2+ minutes** ❌
+- TTS synthesis: **Not working** ❌
+- AR tracking: **Stable** ✅
+
+**Target:**
+- Voice input → Response: **< 10 seconds** 🎯
+- TTS synthesis: **< 2 seconds** 🎯
+- AR tracking: **Stable** ✅
+
+### 🚀 Next Development Priorities
+
+1. **Fix TTS on server** (blocking feature)
+2. **Optimize Whisper transcription speed** (critical UX issue)
+3. **Add progress feedback** (user experience)
+4. **Implement request timeout/retry** (reliability)
+5. **Add audio preprocessing** (reduce Whisper load)
+
+---
+
+**Last Updated:** 2025-11-29
 **Version:** 1.0
-**Status:** ✅ Production Ready
+**Status:** 🚧 In Development - TTS & Performance Issues

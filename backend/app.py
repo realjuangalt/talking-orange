@@ -110,7 +110,6 @@ def _convert_to_mp3(audio_data: bytes, output_path: str, input_format: str = 'wa
 def initialize_voice_system():
     """Initialize the voice processing system."""
     global voice_system
-    import time
     init_start = time.time()
     
     try:
@@ -135,7 +134,6 @@ def initialize_voice_system():
             logger.info(f"✅ [INIT] Async initialization completed in {init_voice_duration}s, result: {result}")
         except Exception as async_error:
             logger.error(f"❌ [INIT] Async initialization failed: {async_error}")
-            import traceback
             logger.error(f"❌ [INIT] Async error traceback: {traceback.format_exc()}")
             # Try synchronous initialization as fallback
             logger.info("🔄 [INIT] Trying synchronous initialization as fallback...")
@@ -160,7 +158,6 @@ def initialize_voice_system():
         
     except Exception as e:
         logger.error(f"❌ Voice System initialization failed: {e}")
-        import traceback
         logger.error(f"❌ Traceback: {traceback.format_exc()}")
         voice_system = None
 
@@ -257,7 +254,27 @@ def health_check():
 def process_speech():
     """Process speech input and return Bitcoin response with audio."""
     try:
-        data = request.get_json()
+        # Parse JSON request with error handling
+        try:
+            data = request.get_json(force=True, silent=True)
+        except Exception as json_error:
+            logger.error(f"❌ JSON parsing error: {json_error}")
+            logger.error(f"❌ Content-Type: {request.content_type}")
+            logger.error(f"❌ Request data preview: {str(request.data)[:200] if request.data else 'None'}")
+            return jsonify({"error": f"Invalid JSON request: {str(json_error)}"}), 400
+        
+        if data is None:
+            logger.error("❌ Failed to parse JSON request - data is None")
+            logger.error(f"❌ Content-Type: {request.content_type}")
+            logger.error(f"❌ Request data length: {len(request.data) if request.data else 0}")
+            logger.error(f"❌ Request data preview: {str(request.data)[:200] if request.data else 'None'}")
+            return jsonify({"error": "Invalid JSON request or missing data"}), 400
+        
+        # Validate data is a dictionary
+        if not isinstance(data, dict):
+            logger.error(f"❌ Request data is not a dictionary: {type(data)}")
+            return jsonify({"error": "Invalid request format - expected JSON object"}), 400
+        
         logger.info(f"📥 Received speech request: {list(data.keys())}")
         
         text = data.get('text', '')
@@ -269,6 +286,11 @@ def process_speech():
         
         logger.info(f"🎤 Audio data present: {bool(audio_data)}, Text present: {bool(text)}")
         logger.info(f"🌍 Language: {language}, Session: {session_id}")
+        
+        # Validate that we have either audio or text
+        if not audio_data and not text:
+            logger.error("❌ No audio data or text provided")
+            return jsonify({"error": "No audio data or text provided"}), 400
         
         if not voice_system:
             logger.error("❌ Voice system not initialized")
@@ -320,7 +342,6 @@ def process_speech():
                     # Don't fail the whole request if we can't save the file
                 
                 # Process audio with voice system
-                import time
                 api_start = time.time()
                 logger.info(f"🎤 [API] Calling voice_system.process_voice_input_sync...")
                 logger.info(f"🎤 [API] Audio buffer size: {len(audio_buffer)} bytes")
@@ -474,7 +495,6 @@ def process_speech():
         except Exception as e:
             logger.error(f"❌ [AUDIO SAVE] Failed to save audio file: {e}")
             logger.error(f"❌ [AUDIO SAVE] Error type: {type(e).__name__}")
-            import traceback
             logger.error(f"❌ [AUDIO SAVE] Traceback: {traceback.format_exc()}")
             logger.warning(f"⚠️ [AUDIO SAVE] Continuing without saving audio file")
             audio_filename = None
@@ -502,16 +522,33 @@ def process_speech():
         return jsonify(response_data)
         
     except Exception as e:
-        logger.error(f"❌ Speech processing error: {e}")
-        logger.error(f"❌ Error type: {type(e).__name__}")
-        logger.error(f"❌ Traceback: {traceback.format_exc()}")
-        return jsonify({"error": f"Speech processing failed: {str(e)}"}), 500
+        error_msg = str(e)
+        error_type = type(e).__name__
+        error_traceback = traceback.format_exc()
+        
+        logger.error(f"❌ Speech processing error: {error_msg}")
+        logger.error(f"❌ Error type: {error_type}")
+        logger.error(f"❌ Traceback: {error_traceback}")
+        
+        # Return detailed error in debug mode, generic in production
+        debug = os.getenv('DEBUG', 'False').lower() == 'true'
+        if debug:
+            return jsonify({
+                "error": f"Speech processing failed: {error_msg}",
+                "error_type": error_type,
+                "traceback": error_traceback
+            }), 500
+        else:
+            return jsonify({"error": f"Speech processing failed: {error_msg}"}), 500
 
 @app.route('/api/speech/transcribe', methods=['POST'])
 def transcribe_speech():
     """Transcribe audio input only."""
     try:
-        data = request.get_json()
+        data = request.get_json(force=True, silent=True)
+        if data is None:
+            return jsonify({"error": "Invalid JSON request"}), 400
+        
         audio_data = data.get('audioData', '')
         language = data.get('language', 'en')
         
@@ -539,7 +576,10 @@ def transcribe_speech():
 def synthesize_speech_endpoint():
     """Synthesize text to speech only."""
     try:
-        data = request.get_json()
+        data = request.get_json(force=True, silent=True)
+        if data is None:
+            return jsonify({"error": "Invalid JSON request"}), 400
+        
         text = data.get('text', '')
         voice = data.get('voice', 'default')
         language = data.get('language', 'en')
@@ -603,7 +643,10 @@ def synthesize_speech_endpoint():
 def generate_bitcoin_content():
     """Generate Bitcoin-specific content."""
     try:
-        data = request.get_json()
+        data = request.get_json(force=True, silent=True)
+        if data is None:
+            return jsonify({"error": "Invalid JSON request"}), 400
+        
         content_type = data.get('contentType', 'conversational')
         topic = data.get('topic', 'general')
         difficulty = data.get('difficulty', 'beginner')
@@ -703,7 +746,12 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     """Handle 500 errors."""
-    return jsonify({"error": "Internal server error"}), 500
+    logger.error(f"❌ [500 ERROR HANDLER] {error}")
+    try:
+        logger.error(f"❌ [500 ERROR HANDLER] Traceback: {traceback.format_exc()}")
+    except Exception as tb_error:
+        logger.error(f"❌ [500 ERROR HANDLER] Could not get traceback: {tb_error}")
+    return jsonify({"error": f"Internal server error: {str(error)}"}), 500
 
 if __name__ == '__main__':
     # Create necessary directories

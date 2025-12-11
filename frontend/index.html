@@ -1175,9 +1175,13 @@
                 playAudioOnce() {
                     // Stop existing audio if any
                     if (this.audio) {
-                        this.audio.pause();
-                        this.audio.currentTime = 0;
-                        this.audio = null;
+                        try {
+                            this.audio.pause();
+                            this.audio.currentTime = 0;
+                            this.audio = null;
+                        } catch (e) {
+                            console.warn('⚠️ Error stopping existing audio:', e);
+                        }
                     }
                     
                     if (!this.audioUrl) {
@@ -1185,43 +1189,104 @@
                         return;
                     }
                     
-                    console.log('🎵 Starting thinking audio (one play per animation cycle)...');
-                    this.audio = new Audio(this.audioUrl);
-                    this.audio.loop = false; // Don't loop forever
+                    console.log('🎵 Starting thinking audio (one play per animation cycle)...', {
+                        audioUrl: this.audioUrl,
+                        timestamp: new Date().toISOString()
+                    });
                     
-                    // When audio ends, just mark it as done - don't restart automatically
-                    this.audio.onended = () => {
-                        console.log('🔚 Thinking audio finished playing');
-                        this.audio = null;
-                        this.isPlaying = false;
-                        // Don't restart here - wait for animation loop detection
-                    };
-                    
-                    // Log when audio starts
-                    this.audio.onplay = () => {
-                        console.log('▶️ Thinking audio started playing');
-                        this.isPlaying = true;
-                    };
-                    
-                    // Handle errors
-                    this.audio.onerror = (e) => {
-                        console.warn('⚠️ Thinking audio error:', e);
-                        this.audio = null;
-                        this.isPlaying = false;
-                    };
-                    
-                    // Start playing
-                    const playPromise = this.audio.play();
-                    if (playPromise !== undefined) {
-                        playPromise
-                            .then(() => {
-                                console.log('✅ Thinking audio playback started');
-                            })
-                            .catch(err => {
-                                console.warn('⚠️ Failed to play thinking audio:', err);
-                                this.audio = null;
-                                this.isPlaying = false;
+                    try {
+                        this.audio = new Audio(this.audioUrl);
+                        this.audio.loop = false; // Don't loop forever
+                        this.audio.volume = 1.0; // Set volume to maximum
+                        this.audio.muted = false; // Ensure not muted
+                        
+                        console.log('🔊 [AUDIO] Audio object created', {
+                            volume: this.audio.volume,
+                            muted: this.audio.muted,
+                            audioUrl: this.audioUrl
+                        });
+                        
+                        // Log when audio is loaded
+                        this.audio.onloadeddata = () => {
+                            console.log('✅ Thinking audio data loaded', {
+                                duration: this.audio.duration ? this.audio.duration.toFixed(2) + 's' : 'unknown',
+                                volume: this.audio.volume,
+                                muted: this.audio.muted
                             });
+                        };
+                        
+                        // Log when audio can play
+                        this.audio.oncanplay = () => {
+                            console.log('✅ Thinking audio can play');
+                        };
+                        
+                        // When audio ends, just mark it as done - don't restart automatically
+                        this.audio.onended = () => {
+                            console.log('🔚 Thinking audio finished playing');
+                            this.audio = null;
+                            this.isPlaying = false;
+                            // Don't restart here - wait for animation loop detection
+                        };
+                        
+                        // Log when audio starts
+                        this.audio.onplay = () => {
+                            console.log('▶️ Thinking audio started playing');
+                            this.isPlaying = true;
+                        };
+                        
+                        // Handle errors with more detail
+                        this.audio.onerror = (e) => {
+                            console.error('❌ Thinking audio error:', {
+                                error: e,
+                                code: this.audio?.error?.code,
+                                message: this.audio?.error?.message,
+                                audioUrl: this.audioUrl
+                            });
+                            if (this.audio?.error) {
+                                const errorCodes = {
+                                    1: 'MEDIA_ERR_ABORTED',
+                                    2: 'MEDIA_ERR_NETWORK',
+                                    3: 'MEDIA_ERR_DECODE',
+                                    4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
+                                };
+                                console.error(`   Error code: ${this.audio.error.code} (${errorCodes[this.audio.error.code] || 'UNKNOWN'})`);
+                            }
+                            this.audio = null;
+                            this.isPlaying = false;
+                        };
+                        
+                        // Start playing
+                        const playPromise = this.audio.play();
+                        if (playPromise !== undefined) {
+                            playPromise
+                                .then(() => {
+                                    console.log('✅ Thinking audio playback started successfully');
+                                })
+                                .catch(err => {
+                                    console.error('❌ Failed to play thinking audio:', {
+                                        error: err,
+                                        name: err.name,
+                                        message: err.message,
+                                        audioUrl: this.audioUrl
+                                    });
+                                    if (err.name === 'NotAllowedError') {
+                                        console.warn('   Autoplay was blocked by browser. User interaction required.');
+                                    } else if (err.name === 'NotSupportedError') {
+                                        console.warn('   Audio format not supported by browser.');
+                                    }
+                                    this.audio = null;
+                                    this.isPlaying = false;
+                                });
+                        } else {
+                            console.warn('⚠️ Audio.play() returned undefined - browser may not support promises');
+                        }
+                    } catch (error) {
+                        console.error('❌ Error creating audio object:', {
+                            error: error,
+                            audioUrl: this.audioUrl
+                        });
+                        this.audio = null;
+                        this.isPlaying = false;
                     }
                 }
                 
@@ -1304,6 +1369,14 @@
                     }
                     
                     this.introAudio = new Audio(this.introAudioUrl);
+                    this.introAudio.volume = 1.0; // Set volume to maximum
+                    this.introAudio.muted = false; // Ensure not muted
+                    
+                    console.log('🔊 [INTRO AUDIO] Audio object created', {
+                        volume: this.introAudio.volume,
+                        muted: this.introAudio.muted,
+                        audioUrl: this.introAudioUrl
+                    });
                     
                     // When intro audio starts, start the animation
                     this.introAudio.onplay = () => {
@@ -1545,6 +1618,14 @@
                             timestamp: new Date().toISOString()
                         });
                         
+                        // Check if we actually recorded any audio
+                        if (audioChunks.length === 0 || audioChunks.every(chunk => chunk.size === 0)) {
+                            console.error('❌ [RECORDING ERROR] No audio data recorded - microphone may be off or not working');
+                            stopThinkingAnimation();
+                            alert('⚠️ No audio recorded. Please check your microphone and try again.');
+                            return;
+                        }
+                        
                         const blobStartTime = performance.now();
                         // Create audio blob
                         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
@@ -1554,6 +1635,14 @@
                             sizeKB: (audioBlob.size / 1024).toFixed(2) + ' KB',
                             chunks: audioChunks.length
                         });
+                        
+                        // Validate audio blob size
+                        if (audioBlob.size < 100) {
+                            console.error('❌ [RECORDING ERROR] Audio blob too small - microphone may not be working');
+                            stopThinkingAnimation();
+                            alert('⚠️ Audio recording is too short or empty. Please check your microphone and try again.');
+                            return;
+                        }
                         
                         // Convert to base64
                         const base64StartTime = performance.now();
@@ -1723,14 +1812,47 @@
                     });
                     
                     if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error('❌ [API ERROR] HTTP error response:', {
-                            status: response.status,
-                            statusText: response.statusText,
-                            body: errorText,
-                            fetchDuration: fetchDuration + 'ms'
-                        });
-                        throw new Error(`HTTP error! status: ${response.status}`);
+                        let errorMessage = `HTTP error! status: ${response.status}`;
+                        let errorDetails = null;
+                        
+                        // Clone response to read it multiple times if needed
+                        const responseClone = response.clone();
+                        
+                        try {
+                            // Try to parse as JSON first (Flask returns JSON errors)
+                            const errorData = await response.json();
+                            errorMessage = errorData.error || errorMessage;
+                            errorDetails = errorData;
+                            console.error('❌ [API ERROR] HTTP error response (JSON):', {
+                                status: response.status,
+                                statusText: response.statusText,
+                                error: errorMessage,
+                                details: errorDetails,
+                                fetchDuration: fetchDuration + 'ms'
+                            });
+                        } catch (jsonError) {
+                            // If JSON parsing fails, try to get text from clone
+                            try {
+                                const errorText = await responseClone.text();
+                                console.error('❌ [API ERROR] HTTP error response (text):', {
+                                    status: response.status,
+                                    statusText: response.statusText,
+                                    body: errorText.substring(0, 500), // First 500 chars
+                                    fetchDuration: fetchDuration + 'ms'
+                                });
+                                // Try to extract error message from HTML if it's an HTML error page
+                                const errorMatch = errorText.match(/KeyError: '([^']+)'/);
+                                if (errorMatch) {
+                                    errorMessage = `KeyError: Missing key '${errorMatch[1]}' in request data`;
+                                } else {
+                                    errorMessage = errorText.substring(0, 200) || errorMessage;
+                                }
+                            } catch (textError) {
+                                console.error('❌ [API ERROR] Could not read error response:', textError);
+                            }
+                        }
+                        
+                        throw new Error(errorMessage);
                     }
                     
                     const parseStartTime = performance.now();
@@ -1828,17 +1950,55 @@
                     }
                     
                     const audioLoadStartTime = performance.now();
+                    
+                    // Validate audio URL
+                    if (!audioUrl) {
+                        throw new Error('Audio URL is empty or undefined');
+                    }
+                    
+                    console.log('🔊 [AUDIO] Creating audio object...', {
+                        audioUrl: audioUrl,
+                        urlType: typeof audioUrl
+                    });
+                    
                     const audio = new Audio(audioUrl);
+                    audio.volume = 1.0; // Set volume to maximum
+                    audio.muted = false; // Ensure not muted
+                    
+                    console.log('🔊 [AUDIO] Audio object created', {
+                        volume: audio.volume,
+                        muted: audio.muted,
+                        audioUrl: audioUrl
+                    });
                     
                     // Store audio globally so we can stop it
                     currentAudio = audio;
                     
-                    // Track audio loading
+                    // Track audio loading with error handling
                     audio.addEventListener('loadstart', () => {
                         console.log('📥 [AUDIO] Load started', {
                             audioUrl: audioUrl,
                             timeSinceRequest: (performance.now() - audioLoadStartTime).toFixed(0) + 'ms'
                         });
+                    });
+                    
+                    // Track errors during loading
+                    audio.addEventListener('error', (e) => {
+                        console.error('❌ [AUDIO] Error loading audio:', {
+                            error: e,
+                            code: audio.error?.code,
+                            message: audio.error?.message,
+                            audioUrl: audioUrl
+                        });
+                        if (audio.error) {
+                            const errorCodes = {
+                                1: 'MEDIA_ERR_ABORTED',
+                                2: 'MEDIA_ERR_NETWORK',
+                                3: 'MEDIA_ERR_DECODE',
+                                4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
+                            };
+                            console.error(`   Error code: ${audio.error.code} (${errorCodes[audio.error.code] || 'UNKNOWN'})`);
+                        }
                     });
                     
                     audio.addEventListener('loadeddata', () => {
