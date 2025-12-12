@@ -61,6 +61,80 @@
             padding-bottom: 10px;
         }
         
+        /* Project List Styles */
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .project-card {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+        
+        .project-card:hover {
+            border-color: #667eea;
+            background: #e7f3ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+        
+        .project-card.selected {
+            border-color: #667eea;
+            background: #e7f3ff;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .project-card h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+        
+        .project-card .project-meta {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .create-project-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: 2px dashed rgba(255,255,255,0.5);
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 120px;
+        }
+        
+        .create-project-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .create-project-card .icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        
+        .create-project-card .text {
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        /* Upload Area Styles */
         .upload-area {
             border: 3px dashed #667eea;
             border-radius: 12px;
@@ -79,6 +153,12 @@
         .upload-area.dragover {
             background: #e7f3ff;
             border-color: #2196F3;
+        }
+        
+        .upload-area.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
         }
         
         .upload-icon {
@@ -171,6 +251,15 @@
             background: #5a6268;
         }
         
+        .btn-success {
+            background: #4caf50;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #45a049;
+        }
+        
         .status-message {
             padding: 15px;
             border-radius: 8px;
@@ -190,8 +279,44 @@
             border: 1px solid #f5c6cb;
         }
         
+        .status-message.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
         .status-message.show {
             display: block;
+        }
+        
+        /* Loading spinner animation */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(102, 126, 234, 0.3);
+            border-radius: 50%;
+            border-top-color: #667eea;
+            animation: spin 1s ease-in-out infinite;
+            vertical-align: middle;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-progress {
+            margin-top: 10px;
+            font-size: 13px;
+            opacity: 0.8;
+        }
+        
+        .loading-time {
+            margin-top: 5px;
+            font-size: 12px;
+            opacity: 0.7;
+            font-style: italic;
         }
         
         .back-button {
@@ -212,6 +337,100 @@
             background: white;
         }
         
+        /* Modal for creating project */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        
+        .modal-header {
+            margin-bottom: 20px;
+        }
+        
+        .modal-header h2 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .modal-body input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .modal-body input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .modal-footer {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        
+        .empty-state .icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        
+        .empty-state h3 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .empty-state p {
+            font-size: 16px;
+            margin-bottom: 30px;
+        }
+        
+        .project-upload-section {
+            display: none;
+        }
+        
+        .project-upload-section.active {
+            display: block;
+        }
+        
+        .current-project-badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        
         @media (max-width: 768px) {
             .content {
                 padding: 20px;
@@ -224,6 +443,10 @@
             .upload-area {
                 padding: 30px 20px;
             }
+            
+            .projects-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -233,41 +456,59 @@
     <div class="container">
         <div class="header">
             <h1>🍊 User Home</h1>
-            <p>Upload and manage your AR content</p>
+            <p>Manage your AR projects and content</p>
         </div>
         
         <div class="content">
             <div id="status-message" class="status-message"></div>
             
-            <!-- Target Image Upload -->
-            <div class="section">
-                <h2>📸 AR Target Image</h2>
-                <p style="margin-bottom: 20px; color: #666;">
-                    Upload an image that will be used as your AR marker. The system will automatically process it to create an AR target.
-                    <br><strong>Tips:</strong> Use high-contrast images (black/white or bold colors work best). Square images (1:1 ratio) are recommended.
-                </p>
-                <div class="upload-area" id="target-upload-area" onclick="document.getElementById('target-file-input').click()">
-                    <div class="upload-icon">📸</div>
-                    <div class="upload-text">Click to upload or drag and drop</div>
-                    <div class="upload-hint">Supports: JPG, PNG, WEBP (automatically converted to AR target)</div>
+            <!-- Projects Section -->
+            <div class="section" id="projects-section">
+                <h2>📁 Your Projects</h2>
+                <div id="projects-grid" class="projects-grid">
+                    <!-- Projects will be loaded here -->
                 </div>
-                <input type="file" id="target-file-input" accept="image/jpeg,image/jpg,image/png,image/webp" />
-                <div class="file-list" id="target-file-list"></div>
             </div>
             
-            <!-- Media Content Upload -->
-            <div class="section">
-                <h2>🎨 Augmented Content</h2>
-                <p style="margin-bottom: 20px; color: #666;">
-                    Upload images, videos, and animation frames that will be displayed when the AR target is detected.
-                </p>
-                <div class="upload-area" id="media-upload-area" onclick="document.getElementById('media-file-input').click()">
-                    <div class="upload-icon">🎨</div>
-                    <div class="upload-text">Click to upload or drag and drop</div>
-                    <div class="upload-hint">Supports: PNG, JPG, MP4, MP3, and animation frames</div>
+            <!-- Project Upload Section (hidden until project selected) -->
+            <div class="project-upload-section" id="project-upload-section">
+                <div class="current-project-badge" id="current-project-badge"></div>
+                
+                <!-- Target Image Upload -->
+                <div class="section">
+                    <h2>📸 AR Target Image</h2>
+                    <p style="margin-bottom: 20px; color: #666;">
+                        Upload an image that will be used as your AR marker. The system will automatically:
+                        <ul style="margin: 10px 0; padding-left: 20px; color: #666; font-size: 14px;">
+                            <li>Analyze the image at multiple scales for optimal tracking accuracy</li>
+                            <li>Extract distinctive feature points for recognition</li>
+                            <li>Generate a compiled .mind file ready for AR tracking</li>
+                        </ul>
+                        <strong>Tips:</strong> Use high-contrast images (black/white or bold colors work best). Square images (1:1 ratio) are recommended. The multi-scale analysis happens automatically - no configuration needed!
+                    </p>
+                    <div class="upload-area" id="target-upload-area" onclick="console.log('👆 [USER-ACTION] Target upload area clicked'); document.getElementById('target-file-input').click()">
+                        <div class="upload-icon">📸</div>
+                        <div class="upload-text">Click to upload or drag and drop</div>
+                        <div class="upload-hint">Supports: JPG, PNG, WEBP (automatically compiled to AR target)</div>
+                    </div>
+                    <input type="file" id="target-file-input" accept="image/jpeg,image/jpg,image/png,image/webp" />
+                    <div class="file-list" id="target-file-list"></div>
                 </div>
-                <input type="file" id="media-file-input" accept="image/*,video/*,audio/*" multiple />
-                <div class="file-list" id="media-file-list"></div>
+                
+                <!-- Media Content Upload -->
+                <div class="section">
+                    <h2>🎨 Augmented Content</h2>
+                    <p style="margin-bottom: 20px; color: #666;">
+                        Upload images, videos, and animation frames that will be displayed when the AR target is detected.
+                    </p>
+                    <div class="upload-area" id="media-upload-area" onclick="console.log('👆 [USER-ACTION] Media upload area clicked'); document.getElementById('media-file-input').click()">
+                        <div class="upload-icon">🎨</div>
+                        <div class="upload-text">Click to upload or drag and drop</div>
+                        <div class="upload-hint">Supports: PNG, JPG, MP4, MP3, and animation frames</div>
+                    </div>
+                    <input type="file" id="media-file-input" accept="image/*,video/*,audio/*" multiple />
+                    <div class="file-list" id="media-file-list"></div>
+                </div>
             </div>
             
             <!-- User Info -->
@@ -276,28 +517,88 @@
                 <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
                     <p><strong>User ID:</strong> <span id="user-id">Loading...</span></p>
                     <p style="margin-top: 10px;"><strong>Status:</strong> <span id="user-status">Not logged in</span></p>
-                    <button class="btn-secondary" onclick="loadUserFiles()" style="margin-top: 15px;">Refresh File List</button>
                 </div>
             </div>
         </div>
     </div>
     
+    <!-- Create Project Modal -->
+    <div id="create-project-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>➕ Create New Project</h2>
+                <p style="color: #666;">Give your AR project a name</p>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="new-project-name" placeholder="Enter project name (e.g., talking-orange)" />
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeCreateProjectModal()">Cancel</button>
+                <button class="btn-primary" onclick="createProject()">Create Project</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Nostr Authentication -->
+    <script src="./lib/nostr-tools.min.js"></script>
+    <script src="./js/nostr-auth.js"></script>
+    
     <script>
         let userId = null;
+        let currentProject = null;
+        let projects = [];
         let uploadedFiles = {
             target: null,
             media: []
         };
         
         // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
-            // Get or create user ID
-            userId = localStorage.getItem('userId') || generateUserId();
-            localStorage.setItem('userId', userId);
-            document.getElementById('user-id').textContent = userId;
-            document.getElementById('user-status').textContent = 'Logged in';
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Check Nostr authentication first
+            if (typeof window.nostrAuth !== 'undefined') {
+                try {
+                    const authStatus = await window.nostrAuth.checkAuthStatus();
+                    if (authStatus.authenticated) {
+                        // Use npub as userId
+                        userId = authStatus.userId || authStatus.npub;
+                        document.getElementById('user-id').textContent = userId;
+                        document.getElementById('user-status').textContent = 'Logged in (Nostr)';
+                        
+                        // Load projects
+                        loadProjects();
+                    } else {
+                        // Not authenticated - redirect to main page to login
+                        document.getElementById('user-id').textContent = 'Not authenticated';
+                        document.getElementById('user-status').textContent = 'Please login first';
+                        document.getElementById('user-status').style.color = '#ff6b6b';
+                        
+                        // Show message and redirect after 2 seconds
+                        setTimeout(() => {
+                            alert('Please login with Nostr first. Redirecting to login page...');
+                            window.location.href = 'index.html';
+                        }, 2000);
+                        return;
+                    }
+                } catch (error) {
+                    console.error('Error checking auth:', error);
+                    // Fall back to old method for backward compatibility
+                    userId = localStorage.getItem('userId') || generateUserId();
+                    localStorage.setItem('userId', userId);
+                    document.getElementById('user-id').textContent = userId;
+                    document.getElementById('user-status').textContent = 'Logged in (Legacy)';
+                    loadProjects();
+                }
+            } else {
+                // Nostr auth not available - use legacy method
+                console.warn('⚠️ Nostr auth not available, using legacy authentication');
+                userId = localStorage.getItem('userId') || generateUserId();
+                localStorage.setItem('userId', userId);
+                document.getElementById('user-id').textContent = userId;
+                document.getElementById('user-status').textContent = 'Logged in (Legacy)';
+                loadProjects();
+            }
             
-            // Setup file inputs
+            // Setup file inputs (will be enabled when project is selected)
             setupFileInput('target-file-input', handleTargetUpload);
             setupFileInput('media-file-input', handleMediaUpload);
             
@@ -305,18 +606,220 @@
             setupDragAndDrop('target-upload-area', 'target-file-input');
             setupDragAndDrop('media-upload-area', 'media-file-input');
             
-            // Load existing files
-            loadUserFiles();
+            // Close modal when clicking outside
+            window.onclick = function(event) {
+                const modal = document.getElementById('create-project-modal');
+                if (event.target === modal) {
+                    closeCreateProjectModal();
+                }
+            }
         });
         
         function generateUserId() {
             return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         }
         
+        async function loadProjects() {
+            try {
+                const response = await fetch(`/api/users/${userId}/projects`);
+                const result = await response.json();
+                
+                if (response.ok) {
+                    projects = result.projects || [];
+                    renderProjects();
+                } else {
+                    showStatus('Error loading projects: ' + (result.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error loading projects:', error);
+                showStatus('Error loading projects: ' + error.message, 'error');
+            }
+        }
+        
+        function renderProjects() {
+            const grid = document.getElementById('projects-grid');
+            grid.innerHTML = '';
+            
+            // Add create project card
+            const createCard = document.createElement('div');
+            createCard.className = 'create-project-card';
+            createCard.onclick = openCreateProjectModal;
+            createCard.innerHTML = `
+                <div class="icon">➕</div>
+                <div class="text">Create New Project</div>
+            `;
+            grid.appendChild(createCard);
+            
+            // Add existing projects
+            if (projects.length === 0) {
+                const emptyState = document.createElement('div');
+                emptyState.className = 'empty-state';
+                emptyState.style.gridColumn = '1 / -1';
+                emptyState.innerHTML = `
+                    <div class="icon">📁</div>
+                    <h3>No projects yet</h3>
+                    <p>Create your first project to start uploading AR content</p>
+                `;
+                grid.appendChild(emptyState);
+            } else {
+                projects.forEach(projectName => {
+                    const card = document.createElement('div');
+                    card.className = 'project-card' + (currentProject === projectName ? ' selected' : '');
+                    card.onclick = () => selectProject(projectName);
+                    card.innerHTML = `
+                        <h3>${projectName}</h3>
+                        <div class="project-meta">Click to manage content</div>
+                    `;
+                    grid.appendChild(card);
+                });
+            }
+        }
+        
+        function openCreateProjectModal() {
+            document.getElementById('create-project-modal').style.display = 'block';
+            document.getElementById('new-project-name').focus();
+        }
+        
+        function closeCreateProjectModal() {
+            document.getElementById('create-project-modal').style.display = 'none';
+            document.getElementById('new-project-name').value = '';
+        }
+        
+        async function createProject() {
+            const projectName = document.getElementById('new-project-name').value.trim();
+            
+            if (!projectName) {
+                showStatus('Please enter a project name', 'error');
+                return;
+            }
+            
+            // Validate project name (alphanumeric, dashes, underscores only)
+            if (!/^[a-zA-Z0-9_-]+$/.test(projectName)) {
+                showStatus('Project name can only contain letters, numbers, dashes, and underscores', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/users/${userId}/projects`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ projectName: projectName })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showStatus(result.message || 'Project created successfully!', 'success');
+                    closeCreateProjectModal();
+                    await loadProjects();
+                    selectProject(projectName);
+                } else {
+                    showStatus('Error: ' + (result.error || 'Failed to create project'), 'error');
+                }
+            } catch (error) {
+                showStatus('Error creating project: ' + error.message, 'error');
+            }
+        }
+        
+        function selectProject(projectName) {
+            console.log('👆 [USER-ACTION] Project selected', {
+                projectName: projectName,
+                userId: userId,
+                previousProject: currentProject,
+                timestamp: new Date().toISOString()
+            });
+            
+            currentProject = projectName;
+            document.getElementById('current-project-badge').textContent = `Current Project: ${projectName}`;
+            document.getElementById('project-upload-section').classList.add('active');
+            
+            // Update upload areas to be enabled
+            document.getElementById('target-upload-area').classList.remove('disabled');
+            document.getElementById('media-upload-area').classList.remove('disabled');
+            
+            // Reload projects to update selected state
+            renderProjects();
+            
+            // Load project files
+            loadProjectFiles();
+        }
+        
+        async function loadProjectFiles() {
+            if (!currentProject) return;
+            
+            console.log('📡 [USER-ACTION] Loading project files', {
+                project: currentProject,
+                userId: userId,
+                timestamp: new Date().toISOString()
+            });
+            
+            try {
+                const loadStartTime = Date.now();
+                const response = await fetch(`/api/users/${userId}/${currentProject}/files`);
+                const loadDuration = Date.now() - loadStartTime;
+                const result = await response.json();
+                
+                console.log('📥 [USER-ACTION] Project files loaded', {
+                    project: currentProject,
+                    status: response.status,
+                    duration: `${loadDuration}ms`,
+                    fileCounts: {
+                        media: (result.files?.media || []).length,
+                        user: (result.files?.user || []).length,
+                        ai: (result.files?.ai || []).length
+                    }
+                });
+                
+                if (response.ok) {
+                    const files = result.files || {};
+                    
+                    // Find target file (.mind file)
+                    // Files are objects with {filename, size, fileType} structure
+                    const targetFileObj = (files.media || []).find(f => {
+                        const filename = typeof f === 'string' ? f : f.filename;
+                        return filename && (filename.includes('.mind') || filename.includes('target'));
+                    });
+                    if (targetFileObj) {
+                        const filename = typeof targetFileObj === 'string' ? targetFileObj : targetFileObj.filename;
+                        uploadedFiles.target = { filename: filename };
+                        updateFileList('target-file-list', [uploadedFiles.target], 'target');
+                    } else {
+                        updateFileList('target-file-list', [], 'target');
+                    }
+                    
+                    // Update media files - handle both string and object formats
+                    uploadedFiles.media = (files.media || []).map(f => {
+                        if (typeof f === 'string') {
+                            return { filename: f };
+                        } else {
+                            return { filename: f.filename, size: f.size, fileType: f.fileType };
+                        }
+                    });
+                    updateFileList('media-file-list', uploadedFiles.media, 'media');
+                }
+            } catch (error) {
+                console.error('Error loading project files:', error);
+            }
+        }
+        
         function setupFileInput(inputId, handler) {
             const input = document.getElementById(inputId);
             input.addEventListener('change', function(e) {
                 if (e.target.files.length > 0) {
+                    const fileType = inputId.includes('target') ? 'target' : 'media';
+                    console.log('👆 [USER-ACTION] File input changed (file picker)', {
+                        inputId: inputId,
+                        fileType: fileType,
+                        fileCount: e.target.files.length,
+                        files: Array.from(e.target.files).map(f => ({
+                            name: f.name,
+                            type: f.type,
+                            size: f.size
+                        })),
+                        timestamp: new Date().toISOString()
+                    });
                     handler(e.target.files);
                 }
             });
@@ -327,7 +830,9 @@
             
             area.addEventListener('dragover', function(e) {
                 e.preventDefault();
-                area.classList.add('dragover');
+                if (!area.classList.contains('disabled')) {
+                    area.classList.add('dragover');
+                }
             });
             
             area.addEventListener('dragleave', function(e) {
@@ -339,7 +844,26 @@
                 e.preventDefault();
                 area.classList.remove('dragover');
                 
+                if (area.classList.contains('disabled')) {
+                    console.warn('⚠️ [USER-ACTION] Drop cancelled: upload area disabled');
+                    return;
+                }
+                
                 const files = e.dataTransfer.files;
+                const fileType = inputId.includes('target') ? 'target' : 'media';
+                console.log('👆 [USER-ACTION] Files dropped (drag and drop)', {
+                    areaId: areaId,
+                    inputId: inputId,
+                    fileType: fileType,
+                    fileCount: files.length,
+                    files: Array.from(files).map(f => ({
+                        name: f.name,
+                        type: f.type,
+                        size: f.size
+                    })),
+                    timestamp: new Date().toISOString()
+                });
+                
                 if (files.length > 0) {
                     if (inputId === 'target-file-input') {
                         handleTargetUpload([files[0]]);
@@ -351,93 +875,255 @@
         }
         
         async function handleTargetUpload(files) {
-            if (files.length === 0) return;
+            console.log('👆 [USER-ACTION] Target image upload initiated', {
+                fileCount: files.length,
+                project: currentProject,
+                userId: userId,
+                timestamp: new Date().toISOString()
+            });
+            
+            if (files.length === 0 || !currentProject) {
+                console.warn('⚠️ [USER-ACTION] Target upload cancelled: no files or no project selected');
+                return;
+            }
             
             const file = files[0];
+            console.log('📄 [USER-ACTION] Target file selected:', {
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                lastModified: new Date(file.lastModified).toISOString()
+            });
             
             // Validate file type
             const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
             if (!validTypes.includes(file.type)) {
+                console.error('❌ [USER-ACTION] Invalid file type for target upload:', file.type);
                 showStatus('Error: Please upload a JPG, PNG, or WEBP image file', 'error');
                 return;
             }
             
-            showStatus('Uploading and processing target image...', 'success');
+            console.log('📤 [USER-ACTION] Starting target image upload...');
+            
+            // Show initial loading status
+            const compilationStartTime = Date.now();
+            showStatus('📤 Uploading image...', 'loading', true);
+            
+            // Start progress updates
+            const progressInterval = setInterval(() => {
+                showLoadingStatus('🔄 Compiling AR target (this may take 30-60 seconds)...', compilationStartTime);
+            }, 1000);
+            window.statusUpdateInterval = progressInterval;
             
             try {
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('fileType', 'target');
                 formData.append('userId', userId);
+                formData.append('projectName', currentProject);
                 
+                console.log('📡 [USER-ACTION] Sending upload request:', {
+                    fileType: 'target',
+                    userId: userId,
+                    projectName: currentProject,
+                    fileName: file.name
+                });
+                
+                // Update status after upload starts
+                setTimeout(() => {
+                    showLoadingStatus('🔄 Compiling AR target (this may take 30-60 seconds)...', compilationStartTime);
+                }, 500);
+                
+                const uploadStartTime = Date.now();
                 const response = await fetch('/api/users/upload', {
                     method: 'POST',
                     body: formData
                 });
+                const uploadDuration = Date.now() - uploadStartTime;
+                
+                // Clear progress interval
+                if (progressInterval) {
+                    clearInterval(progressInterval);
+                    window.statusUpdateInterval = null;
+                }
                 
                 const result = await response.json();
+                console.log('📥 [USER-ACTION] Upload response received:', {
+                    status: response.status,
+                    duration: `${uploadDuration}ms`,
+                    success: response.ok,
+                    result: result
+                });
                 
                 if (response.ok) {
+                    const totalDuration = Math.floor((Date.now() - compilationStartTime) / 1000);
+                    console.log('✅ [USER-ACTION] Target upload successful:', {
+                        filename: result.filename,
+                        size: result.size,
+                        url: result.url,
+                        duration: `${totalDuration}s`
+                    });
                     uploadedFiles.target = result;
                     updateFileList('target-file-list', [result], 'target');
-                    const message = result.message || 'AR target created successfully! Your marker is ready to use.';
+                    const message = result.message || `✅ AR target created successfully! Your marker is ready to use. (Completed in ${totalDuration}s)`;
                     showStatus(message, 'success');
+                    await loadProjectFiles(); // Reload to show new file
                 } else {
                     const errorMsg = result.error || 'Upload failed';
                     const hint = result.hint ? ` (${result.hint})` : '';
-                    showStatus('Error: ' + errorMsg + hint, 'error');
+                    const details = result.details ? `\nDetails: ${result.details.join('\n')}` : '';
+                    
+                    // Log full error details for debugging - make it very visible
+                    console.error('❌ [USER-ACTION] Target upload failed:', {
+                        error: errorMsg,
+                        hint: result.hint,
+                        details: result.details,
+                        originalImage: result.originalImage,
+                        fullResult: result
+                    });
+                    
+                    // Also log the full error message separately for easy reading
+                    console.error('❌ [USER-ACTION] Full error message:', errorMsg);
+                    if (result.hint) {
+                        console.error('💡 [USER-ACTION] Hint:', result.hint);
+                    }
+                    
+                    // Show full error message (not truncated) - show first 1000 chars
+                    const fullErrorMsg = errorMsg.length > 1000 
+                        ? errorMsg.substring(0, 1000) + '\n... (truncated, see console for full error)'
+                        : errorMsg;
+                    
+                    // For status display, show a shorter version but include hint
+                    const displayError = errorMsg.length > 200 
+                        ? errorMsg.substring(0, 200) + '... (see console for full error)'
+                        : errorMsg;
+                    
+                    showStatus('Error: ' + displayError + hint + details, 'error');
                 }
             } catch (error) {
+                console.error('❌ [USER-ACTION] Target upload exception:', {
+                    error: error.message,
+                    stack: error.stack,
+                    fileName: file.name
+                });
                 showStatus('Error uploading file: ' + error.message, 'error');
             }
         }
         
         async function handleMediaUpload(files) {
-            if (files.length === 0) return;
+            if (files.length === 0 || !currentProject) {
+                console.warn('⚠️ [USER-ACTION] Media upload cancelled:', {
+                    reason: files.length === 0 ? 'no files' : 'no project selected',
+                    fileCount: files.length,
+                    project: currentProject,
+                    timestamp: new Date().toISOString()
+                });
+                return;
+            }
+            
+            console.log('👆 [USER-ACTION] Media upload initiated', {
+                fileCount: files.length,
+                project: currentProject,
+                userId: userId,
+                files: Array.from(files).map(f => ({ name: f.name, type: f.type, size: f.size })),
+                timestamp: new Date().toISOString()
+            });
             
             showStatus(`Uploading ${files.length} file(s)...`, 'success');
             
             for (const file of files) {
                 try {
+                    console.log('📄 [USER-ACTION] Media file selected:', {
+                        name: file.name,
+                        type: file.type,
+                        size: file.size,
+                        lastModified: new Date(file.lastModified).toISOString()
+                    });
+                    
+                    console.log('📤 [USER-ACTION] Starting media file upload...');
+                    
                     const formData = new FormData();
                     formData.append('file', file);
                     formData.append('fileType', 'media');
                     formData.append('userId', userId);
+                    formData.append('projectName', currentProject);
                     
+                    console.log('📡 [USER-ACTION] Sending upload request:', {
+                        fileType: 'media',
+                        userId: userId,
+                        projectName: currentProject,
+                        fileName: file.name
+                    });
+                    
+                    const uploadStartTime = Date.now();
                     const response = await fetch('/api/users/upload', {
                         method: 'POST',
                         body: formData
+                    });
+                    const uploadDuration = Date.now() - uploadStartTime;
+                    
+                    console.log('📥 [USER-ACTION] Upload response received:', {
+                        status: response.status,
+                        duration: `${uploadDuration}ms`,
+                        success: response.ok
                     });
                     
                     const result = await response.json();
                     
                     if (response.ok) {
+                        console.log('✅ [USER-ACTION] Media file uploaded successfully:', {
+                            filename: result.filename || file.name,
+                            originalName: file.name,
+                            duration: `${uploadDuration}ms`
+                        });
                         uploadedFiles.media.push(result);
                         updateFileList('media-file-list', uploadedFiles.media, 'media');
-                        showStatus(`Uploaded: ${file.name}`, 'success');
+                        showStatus(`✅ Uploaded: ${file.name}`, 'success');
                     } else {
-                        showStatus('Error uploading ' + file.name + ': ' + (result.error || 'Upload failed'), 'error');
+                        console.error('❌ [USER-ACTION] Media upload failed:', {
+                            filename: file.name,
+                            status: response.status,
+                            error: result.error,
+                            hint: result.hint,
+                            fullResult: result
+                        });
+                        const displayError = result.error || 'Upload failed';
+                        const hint = result.hint ? `\n💡 ${result.hint}` : '';
+                        showStatus(`Error uploading ${file.name}: ${displayError}${hint}`, 'error');
                     }
                 } catch (error) {
-                    showStatus('Error uploading ' + file.name + ': ' + error.message, 'error');
+                    console.error('❌ [USER-ACTION] Media upload error:', {
+                        filename: file.name,
+                        error: error.message,
+                        stack: error.stack
+                    });
+                    showStatus(`Error uploading ${file.name}: ${error.message}`, 'error');
                 }
             }
+            
+            console.log('🔄 [USER-ACTION] Reloading project files after media upload...');
+            await loadProjectFiles(); // Reload to show new files
         }
         
         function updateFileList(listId, files, type) {
             const list = document.getElementById(listId);
             list.innerHTML = '';
             
+            if (files.length === 0) {
+                return;
+            }
+            
             files.forEach((file, index) => {
                 const item = document.createElement('div');
                 item.className = 'file-item';
+                const filename = file.filename || file;
                 item.innerHTML = `
                     <div class="file-info">
-                        <div class="file-name">${file.filename}</div>
-                        <div class="file-type">${file.fileType} • ${formatFileSize(file.size)}</div>
+                        <div class="file-name">${filename}</div>
+                        <div class="file-type">${file.fileType || type} • ${file.size ? formatFileSize(file.size) : 'Unknown size'}</div>
                     </div>
                     <div class="file-actions">
-                        <button class="btn-danger" onclick="deleteFile('${file.filename}', '${type}', ${index})">Delete</button>
+                        <button class="btn-danger" onclick="deleteFile('${filename}', '${type}', ${index})">Delete</button>
                     </div>
                 `;
                 list.appendChild(item);
@@ -445,14 +1131,50 @@
         }
         
         async function deleteFile(filename, type, index) {
-            if (!confirm('Are you sure you want to delete this file?')) return;
+            console.log('👆 [USER-ACTION] Delete file initiated', {
+                filename: filename,
+                type: type,
+                index: index,
+                project: currentProject,
+                userId: userId,
+                timestamp: new Date().toISOString()
+            });
+            
+            if (!confirm('Are you sure you want to delete this file?')) {
+                console.log('👆 [USER-ACTION] Delete file cancelled by user');
+                return;
+            }
+            
+            if (!currentProject) {
+                console.warn('⚠️ [USER-ACTION] Delete file cancelled: no project selected');
+                showStatus('No project selected', 'error');
+                return;
+            }
             
             try {
-                const response = await fetch(`/api/users/${userId}/media/${filename}`, {
+                console.log('📡 [USER-ACTION] Sending delete file request:', {
+                    userId: userId,
+                    project: currentProject,
+                    filename: filename
+                });
+                
+                const deleteStartTime = Date.now();
+                const response = await fetch(`/api/users/${userId}/${currentProject}/media/${filename}`, {
                     method: 'DELETE'
+                });
+                const deleteDuration = Date.now() - deleteStartTime;
+                
+                console.log('📥 [USER-ACTION] Delete file response:', {
+                    status: response.status,
+                    duration: `${deleteDuration}ms`,
+                    success: response.ok
                 });
                 
                 if (response.ok) {
+                    console.log('✅ [USER-ACTION] File deleted successfully:', {
+                        filename: filename,
+                        type: type
+                    });
                     if (type === 'target') {
                         uploadedFiles.target = null;
                         updateFileList('target-file-list', [], 'target');
@@ -461,54 +1183,86 @@
                         updateFileList('media-file-list', uploadedFiles.media, 'media');
                     }
                     showStatus('File deleted successfully', 'success');
+                    await loadProjectFiles(); // Reload to refresh list
                 } else {
+                    const result = await response.json().catch(() => ({}));
+                    console.error('❌ [USER-ACTION] Delete file failed:', {
+                        filename: filename,
+                        status: response.status,
+                        error: result.error
+                    });
                     showStatus('Error deleting file', 'error');
                 }
             } catch (error) {
+                console.error('❌ [USER-ACTION] Delete file exception:', {
+                    filename: filename,
+                    error: error.message,
+                    stack: error.stack
+                });
                 showStatus('Error: ' + error.message, 'error');
             }
         }
         
-        async function loadUserFiles() {
-            try {
-                const response = await fetch(`/api/users/${userId}/files`);
-                const result = await response.json();
-                
-                if (response.ok) {
-                    // Update media file list
-                    uploadedFiles.media = result.files.media || [];
-                    updateFileList('media-file-list', uploadedFiles.media, 'media');
-                    
-                    // Check for target file (would be in media list)
-                    const targetFile = uploadedFiles.media.find(f => f.filename.includes('target') || f.filename.includes('.mind'));
-                    if (targetFile) {
-                        uploadedFiles.target = targetFile;
-                        updateFileList('target-file-list', [targetFile], 'target');
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading files:', error);
-            }
-        }
-        
         function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
+            if (!bytes || bytes === 0) return '0 Bytes';
             const k = 1024;
             const sizes = ['Bytes', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
         }
         
-        function showStatus(message, type) {
+        function showStatus(message, type, persistent = false) {
             const statusEl = document.getElementById('status-message');
-            statusEl.textContent = message;
-            statusEl.className = 'status-message ' + type + ' show';
             
-            setTimeout(() => {
-                statusEl.classList.remove('show');
-            }, 5000);
+            // Clear any existing loading interval
+            if (window.statusUpdateInterval) {
+                clearInterval(window.statusUpdateInterval);
+                window.statusUpdateInterval = null;
+            }
+            
+            if (type === 'loading') {
+                statusEl.innerHTML = `<span class="loading-spinner"></span>${message}`;
+            } else {
+                statusEl.textContent = message;
+            }
+            
+            statusEl.className = 'status-message ' + type + ' show';
+
+            // Don't auto-hide loading messages or persistent messages
+            if (!persistent && type !== 'loading') {
+                setTimeout(() => {
+                    statusEl.classList.remove('show');
+                }, 5000);
+            }
         }
+        
+        function showLoadingStatus(message, startTime) {
+            const statusEl = document.getElementById('status-message');
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const estimatedTotal = 60; // Estimated 60 seconds for compilation
+            const progress = Math.min(Math.floor((elapsed / estimatedTotal) * 100), 95); // Cap at 95% until done
+            
+            statusEl.innerHTML = `
+                <div>
+                    <span class="loading-spinner"></span>${message}
+                    <div class="loading-progress">Progress: ~${progress}% (analyzing image at multiple scales...)</div>
+                    <div class="loading-time">⏱️ Elapsed: ${elapsed}s | Estimated: 30-60 seconds</div>
+                </div>
+            `;
+            statusEl.className = 'status-message loading show';
+        }
+        
+        // Allow Enter key to create project
+        document.addEventListener('DOMContentLoaded', function() {
+            const projectNameInput = document.getElementById('new-project-name');
+            if (projectNameInput) {
+                projectNameInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        createProject();
+                    }
+                });
+            }
+        });
     </script>
 </body>
 </html>
-

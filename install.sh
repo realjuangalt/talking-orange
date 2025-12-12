@@ -84,6 +84,16 @@ $SUDO_CMD apt install -y \
     ffmpeg \
     nginx
 
+# Install canvas system dependencies (needed for AR target compilation)
+echo "🎨 Installing canvas system dependencies (for AR target compilation)..."
+$SUDO_CMD apt install -y \
+    libcairo2-dev \
+    libpango1.0-dev \
+    libjpeg-dev \
+    libgif-dev \
+    librsvg2-dev \
+    libpixman-1-dev
+
 # Audio processing dependencies (for TTS and audio conversion)
 echo "🔊 Installing audio processing dependencies..."
 # Install common TTS engines (package names may differ between Debian/Ubuntu)
@@ -174,24 +184,37 @@ else
     fi
 fi
 
-# Install mind-ar package and canvas (for AR target compilation)
+# Install npm packages (for AR target compilation)
 if command -v node &> /dev/null; then
-    echo "   📦 Installing mind-ar package..."
-    if npm install mind-ar --save 2>/dev/null; then
-        echo "   ✅ mind-ar package installed"
-        echo "   ✅ Same compiler as: https://hiukim.github.io/mind-ar-js-doc/tools/compile"
+    echo "   📦 Installing npm packages for AR target compilation..."
+    
+    # Install all dependencies from package.json
+    if npm install; then
+        echo "   ✅ npm packages installed successfully"
+        echo "   📦 Installed packages:"
+        echo "      - puppeteer (for browser-based compilation)"
+        echo "      - canvas (for image processing)"
+        echo "      - jsdom (for browser API emulation)"
+        echo "      - mind-ar (AR library)"
     else
-        echo "   ⚠️  Failed to install mind-ar package"
-        echo "   ℹ️  Will try to install when needed"
+        echo "   ⚠️  Some npm packages may have failed to install"
+        echo "   ℹ️  AR target compilation may not work properly"
+        echo "   ℹ️  Try running manually: npm install"
     fi
     
-    echo "   📦 Installing canvas package (needed for image processing)..."
-    if npm install canvas --save 2>/dev/null; then
-        echo "   ✅ canvas package installed"
+    # Verify critical packages
+    if npm list puppeteer &>/dev/null; then
+        echo "   ✅ puppeteer installed (for web compiler automation)"
     else
-        echo "   ⚠️  Failed to install canvas package"
-        echo "   ℹ️  Canvas is needed for image compilation. Install manually: npm install canvas"
-        echo "   ℹ️  Note: canvas requires system dependencies (libcairo2-dev, libpango1.0-dev, etc.)"
+        echo "   ⚠️  puppeteer not found - AR compilation will fail"
+    fi
+    
+    if npm list canvas &>/dev/null; then
+        echo "   ✅ canvas installed"
+    else
+        echo "   ⚠️  canvas not found"
+        echo "   ℹ️  Make sure system dependencies are installed:"
+        echo "      sudo apt install -y libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev libpixman-1-dev"
     fi
 fi
 
@@ -230,10 +253,9 @@ echo "   - No build process required, just serve the static HTML file"
 
 # Create necessary directories
 echo "📁 Creating project directories..."
-mkdir -p frontend/media/videos/talking-orange-talking-animation
-mkdir -p frontend/media/videos/talking-orange-thinking-animation
 mkdir -p backend/models
-mkdir -p backend/users  # User-specific directories will be created on-demand
+mkdir -p backend/users  # User-specific directories will be created on-demand when users log in and create projects
+# Note: Project-specific folders (media, videos, etc.) are now created per-user/per-project in backend/users/{npub}/{project_name}/
 # Note: Legacy backend/data/ directories are deprecated but kept for backward compatibility
 
 # Set up environment file

@@ -6,8 +6,10 @@
     <title>Talking Orange AR</title>
     <script src="./lib/aframe.min.js"></script>
     <script src="./lib/mindar-image-aframe.prod.js"></script>
+    <script src="./lib/nostr-tools.min.js" onload="console.log('✅ [SCRIPT] nostr-tools.min.js loaded'); console.log('✅ [SCRIPT] window.NostrTools:', typeof window.NostrTools);" onerror="console.error('❌ [SCRIPT] Failed to load nostr-tools.min.js');"></script>
     
     <!-- Core Modules (Always Loaded) -->
+    <script src="./js/nostr-auth.js" onload="console.log('✅ [SCRIPT] nostr-auth.js loaded'); console.log('✅ [SCRIPT] window.nostrAuth:', typeof window.nostrAuth);" onerror="console.error('❌ [SCRIPT] Failed to load nostr-auth.js');"></script>
     <script src="./js/camera-video.js"></script>
     <script src="./js/ui-helpers.js"></script>
     <script src="./js/ar-core.js"></script>
@@ -126,10 +128,122 @@
         
         <!-- Burger Menu Dropdown -->
         <div id="burger-menu" style="position: absolute; top: 54px; right: 0; background: rgba(0,0,0,0.9); border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 10px; min-width: 180px; display: none; backdrop-filter: blur(10px); box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
-            <button onclick="window.location.href='user.html'" 
+            <button id="login-menu-btn" onclick="showNostrLoginModal()" 
                     style="width: 100%; background: #2196F3; color: white; border: none; padding: 12px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; margin-bottom: 8px; text-align: left;">
-                🔐 Login / User Home
+                <span id="login-btn-text">🔐 Login</span>
+            </button>
+            <button id="user-home-btn" onclick="window.location.href='user.html'" 
+                    style="width: 100%; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 12px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; text-align: left; display: none;">
+                👤 User Home
+            </button>
+            <button id="logout-btn" onclick="handleLogout()" 
+                    style="width: 100%; background: rgba(255,0,0,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 12px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; text-align: left; display: none; margin-top: 8px;">
+                🚪 Logout
         </button>
+        </div>
+    </div>
+    
+    <!-- Nostr Login Modal -->
+    <div id="nostr-login-modal" style="display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(5px);">
+        <div style="background-color: rgba(0,0,0,0.95); margin: 10% auto; padding: 30px; border-radius: 16px; width: 90%; max-width: 500px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="color: white; margin: 0;">🔐 Nostr Authentication</h2>
+                <button onclick="closeNostrLoginModal()" style="background: transparent; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px;">&times;</button>
+            </div>
+            
+            <!-- Tabs -->
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.2);">
+                <button id="create-tab" onclick="switchLoginTab('create')" style="flex: 1; background: #2196F3; color: white; border: none; padding: 12px; border-radius: 8px 8px 0 0; cursor: pointer; font-weight: bold;">
+                    Create New Account
+                </button>
+                <button id="import-tab" onclick="switchLoginTab('recover')" style="flex: 1; background: rgba(255,255,255,0.1); color: white; border: none; padding: 12px; border-radius: 8px 8px 0 0; cursor: pointer;">
+                    Recover Account
+                </button>
+            </div>
+            
+            <!-- Create New Tab -->
+            <div id="create-tab-content" style="display: block;">
+                <div style="background: rgba(255,165,0,0.2); border: 2px solid #ff9800; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: start; gap: 10px;">
+                        <span style="font-size: 24px;">⚠️</span>
+                        <div>
+                            <strong style="color: #ff9800; display: block; margin-bottom: 8px;">BETA SOFTWARE WARNING</strong>
+                            <p style="color: rgba(255,255,255,0.9); font-size: 13px; margin: 0; line-height: 1.5;">
+                                This is beta software. The generated keys are for testing purposes only. <strong style="color: #ff6b6b;">Do not use this for high-value accounts.</strong>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <p style="color: rgba(255,255,255,0.8); margin-bottom: 20px;">
+                    Generate a new Nostr key pair for this application. <strong style="color: #ff6b6b;">IMPORTANT:</strong> Save your private key (nsec) securely - you'll need it to recover your account!
+                </p>
+                <div id="new-key-display" style="display: none; background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <div style="background: rgba(0,255,0,0.1); border: 1px solid #4caf50; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                        <p style="color: #4caf50; font-size: 13px; margin: 0; line-height: 1.4;">
+                            <strong>✅ Key pair generated!</strong> Please save your private key (nsec) in a secure location before logging in. You'll need it to recover your account.
+                        </p>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="color: rgba(255,255,255,0.8); font-size: 12px; display: block; margin-bottom: 5px;">Your Public Key (npub):</label>
+                        <div style="display: flex; gap: 5px;">
+                            <input type="text" id="new-npub" readonly style="flex: 1; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: white; font-family: monospace; font-size: 12px;">
+                            <button onclick="copyToClipboard('new-npub', this)" style="background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap;" title="Copy to clipboard">📋 Copy</button>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="color: rgba(255,255,255,0.8); font-size: 12px; display: block; margin-bottom: 5px;">Your Private Key (nsec) - SAVE THIS:</label>
+                        <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+                            <input type="password" id="new-nsec" readonly style="flex: 1; padding: 10px; background: rgba(255,0,0,0.1); border: 2px solid #ff6b6b; border-radius: 6px; color: white; font-family: monospace; font-size: 12px;">
+                            <button onclick="copyToClipboard('new-nsec', this)" style="background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap;" title="Copy to clipboard">📋 Copy</button>
+                        </div>
+                        <button onclick="toggleNsecVisibility('new-nsec')" style="background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">👁️ Show/Hide</button>
+                    </div>
+                    <button onclick="handleLoginWithGeneratedKey()" id="login-with-generated-key-btn" style="width: 100%; background: #2196F3; color: white; border: none; padding: 14px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 10px;">
+                        🔐 Login with Generated Key
+                    </button>
+                </div>
+                <button onclick="handleCreateAccount()" id="create-account-btn" style="width: 100%; background: #4caf50; color: white; border: none; padding: 14px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;">
+                    Generate New Key Pair
+                </button>
+            </div>
+            
+            <!-- Recover Account Tab -->
+            <div id="import-tab-content" style="display: none;">
+                <div style="background: rgba(255,165,0,0.2); border: 2px solid #ff9800; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: start; gap: 10px;">
+                        <span style="font-size: 24px;">⚠️</span>
+                        <div>
+                            <strong style="color: #ff9800; display: block; margin-bottom: 8px;">BETA SOFTWARE WARNING</strong>
+                            <p style="color: rgba(255,255,255,0.9); font-size: 13px; margin: 0; line-height: 1.5;">
+                                This is beta software. <strong style="color: #ff6b6b;">DO NOT use high-value Nostr keys.</strong> Only use keys created specifically for this application or test keys with no significant value.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <p style="color: rgba(255,255,255,0.8); margin-bottom: 20px;">
+                    Recover your account by entering the Nostr private key (nsec) you used when creating your account. This should only be used if you lost access to your account.
+                </p>
+                
+                <div style="background: rgba(255,0,0,0.1); border: 1px solid rgba(255,0,0,0.3); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+                    <p style="color: #ff6b6b; font-size: 12px; margin: 0; line-height: 1.4;">
+                        <strong>⚠️ Security Notice:</strong> Your private key will be sent to the server for validation. While the server never stores your nsec, this is beta software and security cannot be guaranteed. Use at your own risk.
+                    </p>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <label style="color: rgba(255,255,255,0.8); font-size: 14px; display: block; margin-bottom: 8px;">Private Key (nsec):</label>
+                    <input type="password" id="import-nsec" placeholder="nsec1..." style="width: 100%; padding: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; color: white; font-family: monospace; font-size: 14px; box-sizing: border-box;">
+                    <button onclick="toggleNsecVisibility('import-nsec')" style="margin-top: 5px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">👁️ Show/Hide</button>
+                </div>
+                <button onclick="handleRecoverAccount()" style="width: 100%; background: #ff9800; color: white; border: none; padding: 14px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;">
+                    Recover Account
+                </button>
+            </div>
+            
+            <!-- Status Message -->
+            <div id="login-status" style="margin-top: 20px; padding: 12px; border-radius: 8px; display: none;"></div>
         </div>
     </div>
     
@@ -177,11 +291,11 @@
                 window.loadAvailableTargets().then(() => {
                     if (typeof window.initializeARSystem === 'function') {
                         window.initializeARSystem();
-                    } else {
+                } else {
                         console.error('❌ initializeARSystem function not found - ar-core.js module may not be loaded');
                     }
-                });
-            } else {
+                        });
+                    } else {
                 console.error('❌ loadAvailableTargets function not found - ar-core.js module may not be loaded');
             }
         });
@@ -283,6 +397,466 @@
             
             // Load project modules when target is detected (called from tracking-system.js)
             // This will be set up in the targetFound event handler in tracking-system.js
+            
+            // ============================================
+            // Nostr Authentication Functions
+            // ============================================
+            
+            let currentAuthState = { authenticated: false };
+            
+            // Check auth status on page load
+            async function initAuth() {
+                console.log('🔍 [AUTH-INIT] initAuth() called');
+                console.log('🔍 [AUTH-INIT] window.nostrAuth type:', typeof window.nostrAuth);
+                console.log('🔍 [AUTH-INIT] window.nostrAuth value:', window.nostrAuth);
+                
+                if (typeof window.nostrAuth === 'undefined') {
+                    console.warn('⚠️ [AUTH-INIT] Nostr auth module not loaded yet');
+                    console.warn('⚠️ [AUTH-INIT] Checking for nostr-tools...');
+                    console.warn('⚠️ [AUTH-INIT] window.NostrTools:', typeof window.NostrTools);
+                    console.warn('⚠️ [AUTH-INIT] window.nostr:', typeof window.nostr);
+                    console.warn('⚠️ [AUTH-INIT] All scripts in DOM:', Array.from(document.querySelectorAll('script')).map(s => ({
+                        src: s.src || 'inline',
+                        id: s.id || 'no-id'
+                    })));
+                        return;
+                    }
+                    
+                // Check if user explicitly logged out (don't auto-login)
+                const userLoggedOut = sessionStorage.getItem('nostr_user_logged_out') === 'true';
+                if (userLoggedOut) {
+                    console.log('🔍 [AUTH-INIT] User explicitly logged out, skipping auto-login');
+                    currentAuthState = { authenticated: false };
+                    updateAuthUI(currentAuthState);
+                        return;
+                    }
+                    
+                console.log('✅ [AUTH-INIT] nostrAuth module found, checking auth status...');
+                console.log('✅ [AUTH-INIT] Available methods:', Object.keys(window.nostrAuth));
+                
+                try {
+                    const status = await window.nostrAuth.checkAuthStatus();
+                    console.log('✅ [AUTH-INIT] Auth status:', status);
+                    currentAuthState = status;
+                    updateAuthUI(status);
+                    } catch (error) {
+                    console.error('❌ [AUTH-INIT] Error checking auth status:', error);
+                    console.error('❌ [AUTH-INIT] Error stack:', error.stack);
+                }
+            }
+            
+            // Update UI based on auth status
+            function updateAuthUI(authState) {
+                const loginBtn = document.getElementById('login-menu-btn');
+                const loginBtnText = document.getElementById('login-btn-text');
+                const userHomeBtn = document.getElementById('user-home-btn');
+                const logoutBtn = document.getElementById('logout-btn');
+                
+                if (authState.authenticated) {
+                    // User is authenticated
+                    if (loginBtnText) {
+                        const shortNpub = window.nostrAuth ? window.nostrAuth.getShortNpub(authState.npub) : authState.npub?.substring(0, 12) + '...';
+                        loginBtnText.textContent = `👤 ${shortNpub}`;
+                    }
+                    if (loginBtn) loginBtn.style.display = 'none';
+                    if (userHomeBtn) userHomeBtn.style.display = 'block';
+                    if (logoutBtn) logoutBtn.style.display = 'block';
+                    } else {
+                    // User is not authenticated
+                    if (loginBtnText) loginBtnText.textContent = '🔐 Login';
+                    if (loginBtn) loginBtn.style.display = 'block';
+                    if (userHomeBtn) userHomeBtn.style.display = 'none';
+                    if (logoutBtn) logoutBtn.style.display = 'none';
+                }
+            }
+            
+            // Show login modal
+            function showNostrLoginModal() {
+                const modal = document.getElementById('nostr-login-modal');
+                if (modal) {
+                    modal.style.display = 'block';
+                    switchLoginTab('create'); // Default to create tab
+                }
+            }
+            
+            // Close login modal
+            function closeNostrLoginModal() {
+                const modal = document.getElementById('nostr-login-modal');
+                if (modal) {
+                    modal.style.display = 'none';
+                    // Clear status message
+                    const statusDiv = document.getElementById('login-status');
+                    if (statusDiv) {
+                        statusDiv.style.display = 'none';
+                        statusDiv.textContent = '';
+                        statusDiv.className = '';
+                    }
+                }
+            }
+            
+            // Switch between create and recover tabs
+            function switchLoginTab(tab) {
+                const createTab = document.getElementById('create-tab');
+                const importTab = document.getElementById('import-tab');
+                const createContent = document.getElementById('create-tab-content');
+                const importContent = document.getElementById('import-tab-content');
+                
+                if (tab === 'create') {
+                    if (createTab) {
+                        createTab.style.background = '#2196F3';
+                        createTab.style.fontWeight = 'bold';
+                    }
+                    if (importTab) {
+                        importTab.style.background = 'rgba(255,255,255,0.1)';
+                        importTab.style.fontWeight = 'normal';
+                    }
+                    if (createContent) createContent.style.display = 'block';
+                    if (importContent) importContent.style.display = 'none';
+                } else if (tab === 'recover' || tab === 'import') {
+                    if (createTab) {
+                        createTab.style.background = 'rgba(255,255,255,0.1)';
+                        createTab.style.fontWeight = 'normal';
+                    }
+                    if (importTab) {
+                        importTab.style.background = '#ff9800';
+                        importTab.style.fontWeight = 'bold';
+                    }
+                    if (createContent) createContent.style.display = 'none';
+                    if (importContent) importContent.style.display = 'block';
+                }
+            }
+            
+            // Toggle nsec visibility
+            function toggleNsecVisibility(inputId) {
+                const input = document.getElementById(inputId);
+                if (input) {
+                    input.type = input.type === 'password' ? 'text' : 'password';
+                }
+            }
+            
+            // Copy to clipboard function
+            async function copyToClipboard(inputId, buttonElement) {
+                const input = document.getElementById(inputId);
+                if (!input) {
+                    console.error('Input element not found:', inputId);
+                        return;
+                    }
+                    
+                const value = input.value;
+                if (!value) {
+                    console.warn('No value to copy');
+                        return;
+                    }
+                    
+                const button = buttonElement || document.querySelector(`button[onclick*="${inputId}"]`);
+                const originalText = button ? button.textContent : '📋 Copy';
+                
+                try {
+                    // Use the modern Clipboard API if available
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(value);
+                        console.log('✅ Copied to clipboard');
+                        
+                        // Show temporary feedback
+                        if (button) {
+                            button.textContent = '✅ Copied!';
+                            button.style.background = 'rgba(76, 175, 80, 0.3)';
+                            button.style.borderColor = '#4caf50';
+                            
+                            setTimeout(() => {
+                                button.textContent = originalText;
+                                button.style.background = 'rgba(255,255,255,0.1)';
+                                button.style.borderColor = 'rgba(255,255,255,0.3)';
+                            }, 2000);
+                        }
+            } else {
+                        // Fallback for older browsers
+                        input.select();
+                        input.setSelectionRange(0, 99999); // For mobile devices
+                        document.execCommand('copy');
+                        console.log('✅ Copied to clipboard (fallback method)');
+                        
+                        // Show temporary feedback
+                        if (button) {
+                            button.textContent = '✅ Copied!';
+                            button.style.background = 'rgba(76, 175, 80, 0.3)';
+                            button.style.borderColor = '#4caf50';
+                            
+            setTimeout(() => {
+                                button.textContent = originalText;
+                                button.style.background = 'rgba(255,255,255,0.1)';
+                                button.style.borderColor = 'rgba(255,255,255,0.3)';
+                            }, 2000);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to copy:', error);
+                    // Show error feedback
+                    if (button) {
+                        button.textContent = '❌ Failed';
+                        button.style.background = 'rgba(255,0,0,0.3)';
+                        button.style.borderColor = '#ff6b6b';
+                        
+                        setTimeout(() => {
+                            button.textContent = originalText;
+                            button.style.background = 'rgba(255,255,255,0.1)';
+                            button.style.borderColor = 'rgba(255,255,255,0.3)';
+                        }, 2000);
+                    }
+                }
+            }
+            
+            // Handle create account
+            async function handleCreateAccount() {
+                console.log('🔍 [LOGIN] handleCreateAccount called');
+                console.log('🔍 [LOGIN] window.nostrAuth:', typeof window.nostrAuth);
+                console.log('🔍 [LOGIN] window.NostrTools:', typeof window.NostrTools);
+                console.log('🔍 [LOGIN] window.nostr:', typeof window.nostr);
+                
+                if (typeof window.nostrAuth === 'undefined') {
+                    console.error('❌ [LOGIN] window.nostrAuth is undefined');
+                    console.error('❌ [LOGIN] Available window properties:', Object.keys(window).filter(k => k.toLowerCase().includes('nostr')));
+                    showLoginStatus('Nostr auth module not loaded. Check console for details.', 'error');
+                            return;
+                        }
+                        
+                console.log('✅ [LOGIN] window.nostrAuth is available');
+                
+                const statusDiv = document.getElementById('login-status');
+                const createBtn = document.getElementById('create-account-btn');
+                const newKeyDisplay = document.getElementById('new-key-display');
+                const newNpubInput = document.getElementById('new-npub');
+                const newNsecInput = document.getElementById('new-nsec');
+                
+                try {
+                    if (createBtn) createBtn.disabled = true;
+                    showLoginStatus('Generating key pair...', 'info');
+                    
+                    console.log('🔍 [LOGIN] Calling generateNostrKeyPair...');
+                    console.log('🔍 [LOGIN] generateNostrKeyPair function:', typeof window.nostrAuth.generateNostrKeyPair);
+                    
+                    // Generate key pair
+                    const keyPair = window.nostrAuth.generateNostrKeyPair();
+                    console.log('✅ [LOGIN] Key pair generated:', {
+                        hasNsec: !!keyPair.nsec,
+                        hasNpub: !!keyPair.npub,
+                        npubLength: keyPair.npub?.length
+                    });
+                    
+                    // Display keys
+                    if (newNpubInput) newNpubInput.value = keyPair.npub;
+                    if (newNsecInput) newNsecInput.value = keyPair.nsec;
+                    if (newKeyDisplay) newKeyDisplay.style.display = 'block';
+                    
+                    // Store the generated nsec in a data attribute for the login button
+                    const loginBtn = document.getElementById('login-with-generated-key-btn');
+                    if (loginBtn) {
+                        loginBtn.setAttribute('data-nsec', keyPair.nsec);
+                    }
+                    
+                    showLoginStatus('✅ Key pair generated! Please save your nsec securely, then click "Login with Generated Key" to continue.', 'success');
+                    
+                    // Re-enable the generate button (user can generate again if needed)
+                    if (createBtn) createBtn.disabled = false;
+                    if (createBtn) createBtn.textContent = 'Generate New Key Pair';
+                    } catch (error) {
+                    console.error('Error creating account:', error);
+                    showLoginStatus('❌ Error: ' + error.message, 'error');
+                    if (createBtn) createBtn.disabled = false;
+                }
+            }
+            
+            // Handle login with generated key
+            async function handleLoginWithGeneratedKey() {
+                console.log('🔍 [LOGIN] handleLoginWithGeneratedKey called');
+                
+                if (typeof window.nostrAuth === 'undefined') {
+                    console.error('❌ [LOGIN] window.nostrAuth is undefined');
+                    showLoginStatus('Nostr auth module not loaded. Check console for details.', 'error');
+                        return;
+                    }
+                    
+                const loginBtn = document.getElementById('login-with-generated-key-btn');
+                const newNsecInput = document.getElementById('new-nsec');
+                
+                // Get nsec from data attribute or input field
+                let nsec = null;
+                if (loginBtn && loginBtn.getAttribute('data-nsec')) {
+                    nsec = loginBtn.getAttribute('data-nsec');
+                } else if (newNsecInput && newNsecInput.value.trim()) {
+                    nsec = newNsecInput.value.trim();
+                    } else {
+                    showLoginStatus('❌ No key found. Please generate a new key pair.', 'error');
+                        return;
+                    }
+                    
+                if (!nsec) {
+                    showLoginStatus('❌ No key found. Please generate a new key pair.', 'error');
+                    return;
+                }
+                
+                try {
+                    if (loginBtn) loginBtn.disabled = true;
+                    showLoginStatus('Logging in...', 'info');
+                    
+                    console.log('🔍 [LOGIN] Calling loginWithNsec with generated key...');
+                    const loginResult = await window.nostrAuth.loginWithNsec(nsec);
+                    
+                    if (loginResult.success) {
+                        // Clear logout flag since user is logging in
+                        sessionStorage.removeItem('nostr_user_logged_out');
+                        showLoginStatus('✅ Account created and logged in!', 'success');
+                        currentAuthState = { authenticated: true, npub: loginResult.npub, userId: loginResult.userId };
+                        updateAuthUI(currentAuthState);
+                        
+                        // Close modal after 1.5 seconds
+                        setTimeout(() => {
+                            closeNostrLoginModal();
+                        }, 1500);
+                } else {
+                        showLoginStatus('❌ Error: ' + (loginResult.error || 'Failed to login'), 'error');
+                        if (loginBtn) loginBtn.disabled = false;
+                    }
+                    } catch (error) {
+                    console.error('Error logging in with generated key:', error);
+                    showLoginStatus('❌ Error: ' + error.message, 'error');
+                    if (loginBtn) loginBtn.disabled = false;
+                }
+            }
+            
+            // Handle account recovery
+            async function handleRecoverAccount() {
+                console.log('🔍 [RECOVER] handleRecoverAccount called');
+                console.log('🔍 [RECOVER] window.nostrAuth:', typeof window.nostrAuth);
+                
+                if (typeof window.nostrAuth === 'undefined') {
+                    console.error('❌ [RECOVER] window.nostrAuth is undefined');
+                    console.error('❌ [RECOVER] Available window properties:', Object.keys(window).filter(k => k.toLowerCase().includes('nostr')));
+                    showLoginStatus('Nostr auth module not loaded. Check console for details.', 'error');
+                    return;
+                }
+                
+                console.log('✅ [RECOVER] window.nostrAuth is available');
+                
+                const nsecInput = document.getElementById('import-nsec');
+                const statusDiv = document.getElementById('login-status');
+                
+                if (!nsecInput || !nsecInput.value.trim()) {
+                    showLoginStatus('Please enter your nsec key', 'error');
+                            return;
+                        }
+                        
+                const nsec = nsecInput.value.trim();
+                
+                try {
+                    showLoginStatus('Validating and logging in...', 'info');
+                    
+                    const loginResult = await window.nostrAuth.loginWithNsec(nsec);
+                    
+                    if (loginResult.success) {
+                        // Clear logout flag since user is logging in
+                        sessionStorage.removeItem('nostr_user_logged_out');
+                        showLoginStatus('✅ Account recovered successfully!', 'success');
+                        currentAuthState = { authenticated: true, npub: loginResult.npub, userId: loginResult.userId };
+                        updateAuthUI(currentAuthState);
+                        
+                        // Clear input
+                        if (nsecInput) nsecInput.value = '';
+                        
+                        // Close modal after 1.5 seconds
+                        setTimeout(() => {
+                            closeNostrLoginModal();
+                        }, 1500);
+                    } else {
+                        showLoginStatus('❌ Error: ' + (loginResult.error || 'Invalid key or recovery failed'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Error recovering account:', error);
+                    showLoginStatus('❌ Error: ' + error.message, 'error');
+                }
+            }
+            
+            // Alias for backward compatibility
+            const handleImportKey = handleRecoverAccount;
+            
+            // Handle logout
+            async function handleLogout() {
+                if (typeof window.nostrAuth === 'undefined') {
+                    return;
+                }
+                
+                try {
+                    const result = await window.nostrAuth.logout();
+                    if (result.success) {
+                        // Set flag to prevent auto-login after logout
+                        sessionStorage.setItem('nostr_user_logged_out', 'true');
+                        currentAuthState = { authenticated: false };
+                        updateAuthUI(currentAuthState);
+                        console.log('✅ Logged out successfully - auto-login disabled');
+                    }
+                } catch (error) {
+                    console.error('Error logging out:', error);
+                }
+            }
+            
+            // Show login status message
+            function showLoginStatus(message, type) {
+                const statusDiv = document.getElementById('login-status');
+                if (!statusDiv) return;
+                
+                statusDiv.textContent = message;
+                statusDiv.style.display = 'block';
+                
+                // Set color based on type
+                statusDiv.style.background = type === 'error' ? 'rgba(255,0,0,0.2)' : 
+                                             type === 'success' ? 'rgba(0,255,0,0.2)' : 
+                                             'rgba(255,255,255,0.1)';
+                statusDiv.style.color = type === 'error' ? '#ff6b6b' : 
+                                       type === 'success' ? '#4caf50' : 
+                                       'white';
+                statusDiv.style.border = `1px solid ${type === 'error' ? '#ff6b6b' : type === 'success' ? '#4caf50' : 'rgba(255,255,255,0.3)'}`;
+            }
+            
+            // Close modal when clicking outside
+            window.onclick = function(event) {
+                const modal = document.getElementById('nostr-login-modal');
+                if (event.target === modal) {
+                    closeNostrLoginModal();
+                }
+            }
+            
+            // Initialize auth on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                console.log('🔍 [AUTH-INIT] DOMContentLoaded fired');
+                console.log('🔍 [AUTH-INIT] Checking for nostr modules...');
+                console.log('🔍 [AUTH-INIT] window.NostrTools:', typeof window.NostrTools);
+                console.log('🔍 [AUTH-INIT] window.nostr:', typeof window.nostr);
+                console.log('🔍 [AUTH-INIT] window.nostrAuth:', typeof window.nostrAuth);
+                
+                // Check if scripts are loaded
+                const nostrToolsScript = Array.from(document.querySelectorAll('script')).find(s => 
+                    s.src && s.src.includes('nostr-tools')
+                );
+                const nostrAuthScript = Array.from(document.querySelectorAll('script')).find(s => 
+                    s.src && s.src.includes('nostr-auth')
+                );
+                
+                console.log('🔍 [AUTH-INIT] nostr-tools script found:', !!nostrToolsScript);
+                console.log('🔍 [AUTH-INIT] nostr-auth script found:', !!nostrAuthScript);
+                
+                // Wait a bit for nostr-auth.js to load
+                setTimeout(() => {
+                    console.log('🔍 [AUTH-INIT] After timeout, checking again...');
+                    console.log('🔍 [AUTH-INIT] window.nostrAuth:', typeof window.nostrAuth);
+                    if (typeof window.nostrAuth !== 'undefined') {
+                        console.log('✅ [AUTH-INIT] nostrAuth module is available, initializing...');
+                        initAuth();
+                    } else {
+                        console.error('❌ [AUTH-INIT] nostrAuth module still not available after timeout');
+                        console.error('❌ [AUTH-INIT] All scripts:', Array.from(document.querySelectorAll('script')).map(s => s.src || 'inline'));
+                    }
+                }, 500);
+            });
             
     </script>
 </body>

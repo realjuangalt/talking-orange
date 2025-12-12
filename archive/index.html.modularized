@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>Talking Orange AR</title>
+    <script src="./lib/aframe.min.js"></script>
+    <script src="./lib/mindar-image-aframe.prod.js"></script>
+    
+    <!-- Core Modules (Always Loaded) -->
+    <script src="./js/camera-video.js"></script>
+    <script src="./js/ui-helpers.js"></script>
+    <script src="./js/ar-core.js"></script>
+    <script src="./js/tracking-system.js"></script>
+    
+    <style>
+        /* Ensure body doesn't cover the video */
+        body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            overflow: hidden !important;
+            background: transparent !important;
+        }
+        
+        html {
+            width: 100% !important;
+            height: 100% !important;
+            overflow: hidden !important;
+            background: transparent !important;
+        }
+        
+        /* Project-specific styles will be loaded from project UI files */
+        
+        /* Prevent zoom on double tap */
+        * {
+            touch-action: manipulation;
+        }
+        
+        /* Ensure buttons are touch-friendly */
+        button {
+            min-height: 44px;
+            min-width: 44px;
+        }
+        
+        /* Hide MindAR scanning UI overlay */
+        .mindar-ui-scanning,
+        .mindar-ui-overlay.mindar-ui-scanning,
+        .scanning,
+        .scanline {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+        }
+        
+        /* Make camera view full width */
+        a-scene {
+            width: 100% !important;
+            height: 100% !important;
+            position: relative !important;
+            z-index: 1 !important;
+            background: transparent !important;
+        }
+        
+        /* Ensure video element (camera feed) is full width and visible */
+        a-scene video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            z-index: 0 !important;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            background: #000 !important;
+        }
+        
+        /* Ensure canvas is visible and on top of video */
+        a-scene canvas {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            z-index: 1 !important;
+            display: block !important;
+            visibility: visible !important;
+            background: transparent !important;
+        }
+        
+        /* Also target .a-canvas class */
+        .a-canvas {
+            width: 100% !important;
+            height: 100% !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            z-index: 1 !important;
+            display: block !important;
+            visibility: visible !important;
+        }
+    </style>
+</head>
+<body>
+    <a-scene id="ar-scene" vr-mode-ui="enabled: false" xr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="antialias: true; physicallyCorrectLights: false">
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        <a-assets id="ar-assets">
+            <!-- Media will be loaded dynamically -->
+        </a-assets>
+        
+        <a-entity id="ar-marker" mindar-image-target="targetIndex: 0">
+            <!-- Image plane for all states (idle, thinking, talking) -->
+            <a-plane id="talking-orange-plane" position="0 0 0.01" height="1" width="1" rotation="9 0 0" 
+                     material="shader: flat; transparent: true; alphaTest: 0.1; opacity: 1"
+                     visible="true"></a-plane>
+        </a-entity>
+    </a-scene>
+    
+    <!-- Burger Menu -->
+    <div style="position: fixed; top: 15px; right: 15px; z-index: 1001;">
+        <button id="burger-menu-btn" onclick="toggleBurgerMenu()" 
+                style="background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 10px; border-radius: 8px; cursor: pointer; font-size: 20px; backdrop-filter: blur(5px); width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
+            ☰
+        </button>
+        
+        <!-- Burger Menu Dropdown -->
+        <div id="burger-menu" style="position: absolute; top: 54px; right: 0; background: rgba(0,0,0,0.9); border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 10px; min-width: 180px; display: none; backdrop-filter: blur(10px); box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+            <button onclick="window.location.href='user.html'" 
+                    style="width: 100%; background: #2196F3; color: white; border: none; padding: 12px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; margin-bottom: 8px; text-align: left;">
+                🔐 Login / User Home
+        </button>
+        </div>
+    </div>
+    
+    <!-- Project-Specific UI Container -->
+    <!-- This will be populated dynamically when a target is detected -->
+    <!-- Hidden by default, shown only when target is detected -->
+    <div id="project-ui-container" style="display: none;"></div>
+    
+    <script>
+        // IMMEDIATE TEST - This should appear first in console
+        console.log('🚨 TEST LOG - Script is executing!');
+        console.log('🚨 TEST LOG - If you see this, JavaScript is working');
+        console.log('🔍 MindAR Local Test - Using YOUR targets.mind file');
+        
+        // VR button removal is now handled by ui-helpers.js module
+        
+        // Time counter - logs every 10 seconds
+        // Initialize logging immediately
+        console.log('🍊 [INIT] Talking Orange AR Application Starting...');
+        console.log('🍊 [INIT] Console logging is active');
+        console.log('🍊 [INIT] Browser:', navigator.userAgent);
+        console.log('🍊 [INIT] Timestamp:', new Date().toISOString());
+        
+        let appStartTime = Date.now();
+        console.log(`⏱️ [TIMER] App started at ${new Date().toISOString()}`);
+        setInterval(() => {
+            const elapsed = Math.floor((Date.now() - appStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            console.log(`⏱️ [TIMER] App running: ${minutes}m ${seconds}s (${elapsed}s total)`);
+        }, 10000); // Every 10 seconds
+        
+        // Global variables for AR system
+        let availableTargets = [];
+        let currentTarget = null;
+        let currentTargetMedia = null;
+        
+        // loadProjectUI is now in ar-core.js module
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚨 TEST LOG - DOMContentLoaded fired!');
+            const scene = document.querySelector('a-scene');
+            console.log('🚨 TEST LOG - Scene element:', scene);
+            
+            // Load available targets from API (from ar-core.js module)
+            if (typeof window.loadAvailableTargets === 'function') {
+                window.loadAvailableTargets().then(() => {
+                    if (typeof window.initializeARSystem === 'function') {
+                        window.initializeARSystem();
+                    } else {
+                        console.error('❌ initializeARSystem function not found - ar-core.js module may not be loaded');
+                    }
+                });
+            } else {
+                console.error('❌ loadAvailableTargets function not found - ar-core.js module may not be loaded');
+            }
+        });
+        
+        // loadAvailableTargets is now in ar-core.js module
+        
+        // initializeARSystem, loadTargetMedia, and loadDefaultMedia are now in ar-core.js module
+            
+            // TalkingAnimationModule is now in project-specific files (loaded dynamically after target detection)
+            // Project-specific modules will be loaded via loadProjectModules() function
+            
+            // NOTE: The following code has been moved to project-specific modules:
+            // - TalkingAnimationModule class -> backend/users/{user_id}/{project_name}/js/animation-module.js
+            // - ThinkingAnimationController class -> backend/users/{user_id}/{project_name}/js/animation-controllers.js
+            // - TalkingAnimationController class -> backend/users/{user_id}/{project_name}/js/animation-controllers.js
+            // - Voice processing functions -> backend/users/{user_id}/{project_name}/js/voice-processing.js
+            
+            // Project-specific modules (animation, controllers, voice processing) are now loaded dynamically
+            // after target detection. See loadProjectModules() function below.
+            
+            // Placeholder variables - will be initialized when project modules load
+            let animationModule = null;
+            let thinkingController = null;
+            let talkingController = null;
+            
+            // Function to load project-specific modules after target detection
+            async function loadProjectModules(userId, projectName) {
+                const modules = [
+                    'animation-module.js',      // Must load first
+                    'animation-controllers.js', // Depends on animation-module
+                    'voice-processing.js'       // Depends on animation-controllers
+                ];
+                
+                console.log(`📦 Loading project modules for ${userId}/${projectName}...`);
+                
+                for (const module of modules) {
+                    try {
+                        const moduleUrl = `/api/users/${userId}/${projectName}/js/${module}`;
+                        const response = await fetch(moduleUrl);
+                        
+                        if (response.ok) {
+                            const script = document.createElement('script');
+                            script.textContent = await response.text();
+                            document.head.appendChild(script);
+                            console.log(`✅ Loaded project module: ${module}`);
+                        } else if (response.status === 404) {
+                            console.warn(`⚠️ Project module not found: ${module} (optional, project may not need it)`);
+                        } else {
+                            console.error(`❌ Error loading project module ${module}: ${response.status}`);
+                        }
+                    } catch (error) {
+                        console.warn(`⚠️ Error loading project module ${module}:`, error);
+                        // Continue loading other modules even if one fails
+                    }
+                }
+                
+                console.log(`✅ Finished loading project modules for ${userId}/${projectName}`);
+            }
+            
+            // NOTE: All project-specific code (TalkingAnimationModule, animation controllers, voice processing)
+            // has been moved to project-specific modules that are loaded dynamically after target detection.
+            // The old code has been removed from this file.
+            
+            // Animation control functions - these will be provided by project-specific modules
+            // Placeholder functions that will be replaced when modules load
+            window.startTalkingAnimation = function() {
+                console.warn('⚠️ Project modules not loaded yet. Animation functions will be available after target detection.');
+            };
+            window.stopTalkingAnimation = function() {
+                console.warn('⚠️ Project modules not loaded yet.');
+            };
+            window.startThinkingAnimation = function() {
+                console.warn('⚠️ Project modules not loaded yet.');
+            };
+            window.stopThinkingAnimation = function() {
+                console.warn('⚠️ Project modules not loaded yet.');
+            };
+            window.stopAudio = function() {
+                console.warn('⚠️ Project modules not loaded yet.');
+            };
+            
+            // Test animation functions - will be provided by project modules
+            window.testThinkingAnimation = function() {
+                console.warn('⚠️ Project modules not loaded yet.');
+            };
+            window.testTalkingAnimation = function() {
+                console.warn('⚠️ Project modules not loaded yet.');
+            };
+            
+            // All old project-specific code has been removed and moved to project-specific modules
+            
+            // Tracking system is now handled by tracking-system.js module
+            // The setupTrackingSystem function is called from ar-core.js after scene loads
+            
+            // All old project-specific and tracking code has been removed
+            
+            // Initialize AR system when DOM is ready
+            document.addEventListener('DOMContentLoaded', function() {
+                console.log('🚨 TEST LOG - DOMContentLoaded fired!');
+                const scene = document.querySelector('a-scene');
+                console.log('🚨 TEST LOG - Scene element:', scene);
+                
+                // Load available targets from API (from ar-core.js module)
+                if (typeof window.loadAvailableTargets === 'function') {
+                    window.loadAvailableTargets().then(() => {
+                        if (typeof window.initializeARSystem === 'function') {
+                            window.initializeARSystem();
+                        } else {
+                            console.error('❌ initializeARSystem function not found - ar-core.js module may not be loaded');
+                        }
+                    });
+                } else {
+                    console.error('❌ loadAvailableTargets function not found - ar-core.js module may not be loaded');
+                }
+            });
+            
+            // Load project modules when target is detected (called from tracking-system.js)
+            // This will be set up in the targetFound event handler in tracking-system.js
+            
+    </script>
+</body>
+</html>

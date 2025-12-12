@@ -18,6 +18,7 @@ This project creates an AR experience where users:
 - **MindAR** - Modern marker-based AR framework (MIT License)
 - **A-Frame** - Web framework for VR/AR (MIT License)
 - **Three.js** - 3D rendering (MIT License)
+- **Nostr Tools** - Nostr authentication and key management
 - **MediaRecorder API** - Audio recording
 - **Web Audio API** - Audio playback
 
@@ -65,6 +66,15 @@ This project creates an AR experience where users:
 - ✅ **Language Toggle** - English/Spanish support
 - ✅ **Test Buttons** - Manual animation testing
 - ✅ **Mobile Responsive** - Touch-friendly controls
+- ✅ **Burger Menu** - Navigation and authentication
+
+### Authentication & User Management
+- ✅ **Nostr Authentication** - Secure login with Nostr private keys (nsec)
+- ✅ **Key Generation** - Create new Nostr key pairs
+- ✅ **Key Import** - Import existing Nostr keys
+- ✅ **Secure Cookies** - httpOnly cookies for session management
+- ✅ **Multi-User Support** - User-specific project directories
+- ✅ **Project Management** - Create and manage multiple AR projects per user
 
 ### Debugging & Monitoring
 - ✅ **Frontend Logging** - 168+ console.log statements for debugging
@@ -79,9 +89,17 @@ This project creates an AR experience where users:
 talking-orange/
 ├── frontend/
 │   ├── index.html              # Main AR application
-│   ├── lib/                     # Pre-bundled AR libraries
+│   ├── user.html               # User project management page
+│   ├── lib/                     # Pre-bundled libraries
 │   │   ├── aframe.min.js
-│   │   └── mindar-image-aframe.prod.js
+│   │   ├── mindar-image-aframe.prod.js
+│   │   └── nostr-tools.min.js  # Nostr authentication library
+│   ├── js/                      # Core JavaScript modules
+│   │   ├── ar-core.js          # AR initialization and core functions
+│   │   ├── camera-video.js     # Camera diagnostics
+│   │   ├── tracking-system.js  # AR tracking event handlers
+│   │   ├── ui-helpers.js       # UI helper functions
+│   │   └── nostr-auth.js       # Nostr authentication module
 │   └── media/
 │       ├── targets.mind         # MindAR marker file
 │       ├── talking-orange-*.png # Character images
@@ -89,18 +107,29 @@ talking-orange/
 │           ├── talking-orange-talking-animation/  # 145 frames + audio
 │           └── talking-orange-thinking-animation/ # 145 frames + audio
 ├── backend/
-│   ├── app.py                   # Flask server
+│   ├── app.py                   # Flask server with API endpoints
+│   ├── user_manager.py          # User and project management
 │   ├── gen/                     # Voice processing modules
 │   │   ├── main.py             # Main voice system
 │   │   ├── voice_to_text.py    # Whisper STT
 │   │   ├── text_to_voice.py    # TTS engines
 │   │   └── text_generator.py   # LLM integration
+│   ├── users/                   # User-specific data (created on demand)
+│   │   └── {user_id}/          # User directory (npub)
+│   │       └── {project_name}/ # Project directory
+│   │           ├── media/      # Project media files
+│   │           ├── ai/         # AI audio responses
+│   │           ├── user-input/ # User audio inputs
+│   │           ├── js/         # Project-specific JS modules
+│   │           └── ui.html     # Project-specific UI
 │   ├── models/                  # Whisper models (small.pt, medium.pt)
 │   └── voices/                  # TTS voice files
 ├── start.sh                     # Production server script
 ├── start_local.sh               # Development server with options
+├── start_backend.py              # Python startup script
 ├── install.sh                   # Installation script
 ├── requirements-python.txt      # Python dependencies
+├── NOSTR_AUTHENTICATION_PLAN.md # Nostr auth implementation plan
 └── README.md
 ```
 
@@ -190,10 +219,14 @@ talking-orange/
 ### Accessing the Application
 
 1. **Open browser** to `http://localhost:3000`
-2. **Grant permissions** for camera and microphone
-3. **Print the marker** from `frontend/media/talking-orange-card-base.pdf`
-4. **Point camera** at the marker (1-2 feet away)
-5. **Click "Ask Question"** to start voice interaction
+2. **Login with Nostr** - Click the burger menu (☰) → "Login"
+   - **Create New Account**: Generates a new Nostr key pair (save your nsec!)
+   - **Import Existing Key**: Enter your existing nsec to login
+3. **Grant permissions** for camera and microphone
+4. **Create a Project** (optional) - Go to "User Home" to create and manage projects
+5. **Print the marker** from your project's target image
+6. **Point camera** at the marker (1-2 feet away)
+7. **Click "Ask Question"** to start voice interaction
 
 ## 🔧 Configuration
 
@@ -325,10 +358,28 @@ Returns:
 
 ## 📊 API Endpoints
 
+### Authentication
+- `POST /api/auth/nostr/login` - Login with Nostr private key (nsec)
+- `GET /api/auth/nostr/status` - Check authentication status
+- `POST /api/auth/nostr/logout` - Logout and clear session
+
 ### Voice Processing
 - `POST /api/speech/process` - Full voice-to-voice pipeline
 - `POST /api/speech/transcribe` - Speech-to-text only
 - `POST /api/speech/synthesize` - Text-to-speech only
+
+### User & Project Management
+- `GET /api/users/<user_id>/projects` - List all projects for a user
+- `POST /api/users/<user_id>/projects` - Create a new project
+- `GET /api/users/<user_id>/<project_name>/files` - List files in a project
+- `POST /api/users/upload` - Upload target image or media (requires projectName)
+- `DELETE /api/users/<user_id>/<project_name>/media/<filename>` - Delete a file
+
+### AR Targets
+- `GET /api/targets` - Get all available AR targets from all users/projects
+- `GET /api/users/<user_id>/<project_name>/media/<filename>` - Serve project media
+- `GET /api/users/<user_id>/<project_name>/ui` - Serve project-specific UI
+- `GET /api/users/<user_id>/<project_name>/js/<filename>` - Serve project JS modules
 
 ### System
 - `GET /api/health` - System health and status
@@ -440,24 +491,37 @@ sudo systemctl restart talking-orange
 
 ### Code Structure
 
-**Frontend (`frontend/index.html`):**
-- Modular JavaScript architecture
-- Event-driven AR tracking
-- Frame-based animation system
-- Comprehensive logging (168+ console.log statements)
+**Frontend Architecture:**
+- **Modular JavaScript** - Core modules in `frontend/js/`
+  - `ar-core.js` - AR initialization, target loading, media management
+  - `tracking-system.js` - AR tracking event handlers
+  - `camera-video.js` - Camera diagnostics and video stream management
+  - `ui-helpers.js` - UI helper functions (burger menu, etc.)
+  - `nostr-auth.js` - Nostr authentication and key management
+- **Project-Specific Modules** - Loaded dynamically from `backend/users/{user_id}/{project_name}/js/`
+  - `animation-module.js` - Animation controller class
+  - `animation-controllers.js` - Thinking and talking animation controllers
+  - `voice-processing.js` - Voice recording and processing
+- **Event-driven AR tracking** - Real-time marker detection and tracking
+- **Frame-based animation system** - 145-frame talking/thinking animations
+- **Comprehensive logging** - Detailed console logs for debugging
 
-**Backend (`backend/`):**
-- Flask REST API
-- Modular voice processing (`backend/gen/`)
-- Automatic model management
-- Error handling and logging
+**Backend Architecture:**
+- **Flask REST API** - RESTful endpoints for all operations
+- **User Management** (`backend/user_manager.py`) - Multi-user, multi-project system
+- **Modular voice processing** (`backend/gen/`) - STT, TTS, LLM integration
+- **Project-based storage** - `backend/users/{user_id}/{project_name}/`
+- **Automatic model management** - Whisper model downloading and caching
+- **Error handling and logging** - Comprehensive error tracking
 
 ### Adding Features
 
-1. **New Animation States:** Add frames to `frontend/media/videos/`
+1. **New Animation States:** Add frames to project's `media/videos/` directory
 2. **New TTS Voices:** Configure in `backend/gen/text_to_voice.py`
-3. **New Prompts:** Add to `backend/gen/prompts/`
-4. **API Endpoints:** Add routes in `backend/app.py`
+3. **New Prompts:** Add to project's `prompts/` directory
+4. **Project-Specific Modules:** Add JS files to `backend/users/{user_id}/{project_name}/js/`
+5. **Project-Specific UI:** Customize `backend/users/{user_id}/{project_name}/ui.html`
+6. **API Endpoints:** Add routes in `backend/app.py`
 
 ## 📄 License
 
@@ -481,9 +545,80 @@ This is a private project. For issues or questions, contact the maintainer.
 
 ---
 
+## 🔐 Authentication & User Management
+
+### Nostr Authentication
+
+The application uses **Nostr** (Notes and Other Stuff Transmitted by Relays) for secure authentication:
+
+- **Private Key (nsec)**: Your secret key - never share this!
+- **Public Key (npub)**: Your user identifier - derived from nsec
+- **User ID**: Your npub is used as your user ID
+
+**Features:**
+- Generate new Nostr key pairs
+- Import existing keys
+- Secure httpOnly cookies for session management
+- npub-based user identification
+
+**Security:**
+- Private keys (nsec) are never stored on the server
+- Only public keys (npub) are stored in secure cookies
+- All authentication is handled client-side with Nostr tools
+
+### Project Management
+
+Each user can create and manage multiple AR projects:
+
+1. **Create Project**: Go to User Home → "Create New Project"
+2. **Upload Content**: 
+   - AR Target Image (automatically compiled to .mind file)
+   - Media files (images, videos, audio)
+3. **Project Structure**: `backend/users/{npub}/{project_name}/`
+   - `media/` - Target images and media files
+   - `ai/` - AI-generated audio responses
+   - `user-input/` - User voice recordings
+   - `js/` - Project-specific JavaScript modules
+   - `ui.html` - Project-specific UI
+
+### User Directory Structure
+
+```
+backend/users/
+└── {npub}/                    # User directory (Nostr public key)
+    └── {project_name}/        # Project directory
+        ├── media/             # Media files (targets, images, videos)
+        ├── ai/                # AI audio responses
+        ├── user-input/        # User audio inputs
+        ├── js/                # Project-specific JS modules
+        │   ├── animation-module.js
+        │   ├── animation-controllers.js
+        │   └── voice-processing.js
+        └── ui.html            # Project-specific UI
+```
+
 ## 📊 Project Status & Next Steps
 
-### ✅ Recent Updates (2025-12-11)
+### ✅ Recent Updates (2025-12-12)
+
+1. **Nostr Authentication System**
+   - Implemented Nostr-based authentication with nsec/npub keys
+   - Added secure login modal with key generation and import
+   - Integrated httpOnly cookie-based session management
+   - Updated user management to use npub as user ID
+
+2. **Project Management System**
+   - Multi-project support per user
+   - Project creation and management UI
+   - Project-specific content uploads
+   - Dynamic loading of project-specific modules and UI
+
+3. **Modular Architecture**
+   - Extracted core AR functions into separate modules
+   - Project-specific code loaded dynamically after target detection
+   - Improved code organization and maintainability
+
+### ✅ Previous Updates (2025-12-11)
 
 1. **Audio Playback Fixes**
    - Fixed audio not playing by adding explicit volume (1.0) and muted (false) settings
@@ -618,6 +753,6 @@ This is a private project. For issues or questions, contact the maintainer.
 
 ---
 
-**Last Updated:** 2025-12-11
-**Version:** 1.1
-**Status:** ✅ Core Features Working - Performance Optimizations Ongoing
+**Last Updated:** 2025-12-12
+**Version:** 1.2
+**Status:** ✅ Core Features Working - Nostr Auth & Project Management Added

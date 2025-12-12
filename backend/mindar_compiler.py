@@ -38,39 +38,57 @@ def check_mindar_available():
         
         if os.path.exists(node_modules):
             logger.info("✅ mind-ar package found in node_modules")
+            # Also check if canvas is available (required by compile_target.js)
+            canvas_modules = os.path.join(project_root, 'node_modules', 'canvas')
+            if not os.path.exists(canvas_modules):
+                logger.warning("⚠️ canvas package not found (required for compilation)")
+                return False
             return True
         
         # Check global installation
         result = subprocess.run(['npm', 'list', '-g', 'mind-ar'], capture_output=True, text=True, timeout=5)
         if result.returncode == 0 and 'mind-ar' in result.stdout:
             logger.info("✅ mind-ar package found globally")
+            # Check for canvas globally
+            canvas_result = subprocess.run(['npm', 'list', '-g', 'canvas'], capture_output=True, text=True, timeout=5)
+            if canvas_result.returncode != 0 or 'canvas' not in canvas_result.stdout:
+                logger.warning("⚠️ canvas package not found globally (required for compilation)")
+                return False
             return True
     except Exception as e:
         logger.debug(f"mind-ar check: {e}")
     return False
 
 def install_mindar():
-    """Install mind-ar npm package."""
+    """Install mind-ar and canvas npm packages."""
     try:
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         
-        logger.info("📦 Installing mind-ar package...")
+        logger.info("📦 Installing mind-ar and canvas packages...")
         
-        # Install mind-ar locally
-        result = subprocess.run(
-            ['npm', 'install', 'mind-ar', '--save'],
-            cwd=project_root,
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
+        # Install both mind-ar and canvas (canvas is required by compile_target.js)
+        packages = ['mind-ar', 'canvas']
+        for package in packages:
+            logger.info(f"📦 Installing {package}...")
+            result = subprocess.run(
+                ['npm', 'install', package, '--save'],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                timeout=300  # canvas can take a while to build
+            )
+            
+            if result.returncode == 0:
+                logger.info(f"✅ {package} installed successfully")
+            else:
+                logger.error(f"❌ Failed to install {package}: {result.stderr}")
+                if package == 'canvas':
+                    logger.warning("⚠️ canvas installation failed. This may require system dependencies.")
+                    logger.warning("   On Ubuntu/Debian: sudo apt-get install build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev")
+                return False
         
-        if result.returncode == 0:
-            logger.info("✅ mind-ar installed successfully")
-            return True
-        else:
-            logger.error(f"❌ Failed to install mind-ar: {result.stderr}")
-            return False
+        logger.info("✅ All packages installed successfully")
+        return True
     except subprocess.TimeoutExpired:
         logger.error("❌ npm install timed out")
         return False
@@ -157,13 +175,15 @@ def compile_image_to_mind(image_path, output_path=None):
             return None
         
         # Run the compilation script
+        # Note: Compilation can take 60-180 seconds depending on image size and complexity
+        # Puppeteer needs time to: load page, upload file, compile (30-60s), download file
         cmd = ['node', compile_script, image_path, output_path]
         result = subprocess.run(
             cmd,
             cwd=project_root,
             capture_output=True,
             text=True,
-            timeout=120
+            timeout=300  # 5 minutes - compilation can take 60-120 seconds, plus overhead
         )
         
         if result.returncode == 0 and os.path.exists(output_path):
@@ -172,8 +192,29 @@ def compile_image_to_mind(image_path, output_path=None):
             return output_path
         else:
             error_msg = result.stderr or result.stdout or "Unknown error"
-            logger.error(f"❌ Compilation failed: {error_msg}")
-            return None
+            logger.error(f"❌ Compilation failed (returncode={result.returncode})")
+            logger.error(f"   stderr: {result.stderr}")
+            logger.error(f"   stdout: {result.stdout}")
+            logger.error(f"   Command: {' '.join(cmd)}")
+            
+            # Check for common error patterns and provide helpful hints
+            error_lower = error_msg.lower()
+            hint = ""
+            if "cannot find module 'canvas'" in error_lower or "require('canvas')" in error_lower or "cannot find module \"canvas\"" in error_lower:
+                hint = "\n\n💡 Hint: The 'canvas' package is missing. Install it with:\n   npm install canvas\n\n   If installation fails, you may need system dependencies:\n   sudo apt-get install -y libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev libpixman-1-dev\n\n   Then reinstall canvas: npm install canvas"
+            elif "cannot find module 'mind-ar'" in error_lower or "cannot find module \"mind-ar\"" in error_lower:
+                hint = "\n\n💡 Hint: The 'mind-ar' package is missing. Install it with:\n   npm install mind-ar"
+            elif "node" in error_lower and ("not found" in error_lower or "command not found" in error_lower):
+                hint = "\n\n💡 Hint: Node.js is not installed or not in PATH. Install from: https://nodejs.org/"
+            elif "error: cannot find module" in error_lower or "error: cannot resolve" in error_lower:
+                # Generic module not found error
+                if "canvas" in error_lower:
+                    hint = "\n\n💡 Hint: The 'canvas' package is missing. Install it with:\n   npm install canvas\n\n   If installation fails, install system dependencies first:\n   sudo apt-get install -y libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev libpixman-1-dev"
+                elif "mind-ar" in error_lower:
+                    hint = "\n\n💡 Hint: The 'mind-ar' package is missing. Install it with:\n   npm install mind-ar"
+            
+            # Raise an exception with the error message so it can be caught and returned to frontend
+            raise RuntimeError(f"Compilation failed: {error_msg}{hint}")
             
     except RuntimeError as e:
         # Re-raise runtime errors (like missing package) as-is

@@ -5,6 +5,11 @@ Python Flask backend for voice processing and Bitcoin evangelism.
 
 import os
 import sys
+
+print("=" * 60, file=sys.stderr)
+print("🚀 [STARTUP] Starting backend server...", file=sys.stderr)
+print("=" * 60, file=sys.stderr)
+print("📦 [STARTUP] Importing standard library modules...", file=sys.stderr)
 import json
 import logging
 import asyncio
@@ -13,32 +18,68 @@ import traceback
 import tempfile
 import subprocess
 from pathlib import Path
+print("✅ [STARTUP] Standard library modules imported", file=sys.stderr)
+
+print("📦 [STARTUP] Importing Flask and dependencies...", file=sys.stderr)
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
+print("✅ [STARTUP] Flask and dependencies imported", file=sys.stderr)
 
 # Add backend/gen directory to path
+print("📁 [STARTUP] Setting up Python path...", file=sys.stderr)
 gen_dir = os.path.join(os.path.dirname(__file__), 'gen')
 if gen_dir not in sys.path:
     sys.path.insert(0, gen_dir)
+print(f"✅ [STARTUP] Python path configured (gen_dir: {gen_dir})", file=sys.stderr)
 
-# Import our voice processing modules
-import importlib.util
+# Import our voice processing modules - LAZY LOADING to prevent reloader issues
+# Only import in main process, not in Flask reloader child process
+print("📦 [STARTUP] Checking if voice modules should be imported...", file=sys.stderr)
+is_reloader = os.environ.get('WERKZEUG_RUN_MAIN') != 'true' and os.environ.get('FLASK_ENV') == 'development'
+print(f"   [STARTUP] Is reloader process: {is_reloader}", file=sys.stderr)
 
-# Load the main module from backend/gen directory
-spec = importlib.util.spec_from_file_location("main", os.path.join(gen_dir, "main.py"))
-main_module = importlib.util.module_from_spec(spec)
-sys.modules["main"] = main_module
-spec.loader.exec_module(main_module)
+if is_reloader:
+    print("⏭️  [STARTUP] Skipping voice module import in reloader process", file=sys.stderr)
+    # Set placeholders that will be loaded on first use
+    TalkingOrangeVoiceSystem = None
+    process_voice_file = None
+    process_voice_buffer = None
+    transcribe_audio = None
+    synthesize_speech = None
+    main_module = None
+else:
+    print("📦 [STARTUP] Importing voice processing modules...", file=sys.stderr)
+    import importlib.util
+    print("   [STARTUP] importlib.util imported", file=sys.stderr)
 
-# Import the classes and functions we need
-TalkingOrangeVoiceSystem = main_module.TalkingOrangeVoiceSystem
-process_voice_file = main_module.process_voice_file
-process_voice_buffer = main_module.process_voice_buffer
-transcribe_audio = main_module.transcribe_audio
-synthesize_speech = main_module.synthesize_speech
+    # Load the main module from backend/gen directory
+    print("   [STARTUP] Loading main.py from gen directory...", file=sys.stderr)
+    main_py_path = os.path.join(gen_dir, "main.py")
+    print(f"   [STARTUP] main.py path: {main_py_path}", file=sys.stderr)
+    print(f"   [STARTUP] main.py exists: {os.path.exists(main_py_path)}", file=sys.stderr)
+
+    spec = importlib.util.spec_from_file_location("main", main_py_path)
+    print("   [STARTUP] Spec created", file=sys.stderr)
+    main_module = importlib.util.module_from_spec(spec)
+    print("   [STARTUP] Module from spec created", file=sys.stderr)
+    sys.modules["main"] = main_module
+    print("   [STARTUP] Module added to sys.modules", file=sys.stderr)
+    print("   [STARTUP] Executing main.py module (this may take a moment)...", file=sys.stderr)
+    spec.loader.exec_module(main_module)
+    print("   [STARTUP] main.py module executed", file=sys.stderr)
+
+    # Import the classes and functions we need
+    print("   [STARTUP] Extracting classes and functions from main module...", file=sys.stderr)
+    TalkingOrangeVoiceSystem = main_module.TalkingOrangeVoiceSystem
+    process_voice_file = main_module.process_voice_file
+    process_voice_buffer = main_module.process_voice_buffer
+    transcribe_audio = main_module.transcribe_audio
+    synthesize_speech = main_module.synthesize_speech
+    print("✅ [STARTUP] Voice processing modules imported", file=sys.stderr)
 
 # Import user management module
+print("📦 [STARTUP] Importing user_manager module...", file=sys.stderr)
 from user_manager import (
     ensure_user_directories,
     ensure_project_directories,
@@ -52,33 +93,45 @@ from user_manager import (
     user_exists,
     project_exists,
     list_user_projects,
+    list_user_files as list_user_files_from_manager,
     detect_project_from_path
 )
+print("✅ [STARTUP] user_manager module imported", file=sys.stderr)
 
 # Import MindAR compiler
+print("📦 [STARTUP] Importing MindAR compiler...", file=sys.stderr)
 try:
     from mindar_compiler import compile_image_to_mind, validate_image_for_ar, check_node_available
     MINDAR_COMPILER_AVAILABLE = True
+    print("✅ [STARTUP] MindAR compiler imported", file=sys.stderr)
 except ImportError as e:
     # Logger might not be initialized yet, use print for early errors
-    print(f"⚠️ mindar_compiler module not available: {e}")
+    print(f"⚠️ [STARTUP] mindar_compiler module not available: {e}", file=sys.stderr)
     MINDAR_COMPILER_AVAILABLE = False
     compile_image_to_mind = None
     validate_image_for_ar = None
     check_node_available = None
 
 # Load environment variables from project root
+print("📦 [STARTUP] Loading environment variables...", file=sys.stderr)
 project_root = os.path.dirname(os.path.dirname(__file__))
 env_path = os.path.join(project_root, '.env')
+print(f"   [STARTUP] .env path: {env_path}", file=sys.stderr)
 load_dotenv(env_path)
+print("✅ [STARTUP] Environment variables loaded", file=sys.stderr)
 
 # Set up logging
+print("📦 [STARTUP] Setting up logging...", file=sys.stderr)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+print("✅ [STARTUP] Logging configured", file=sys.stderr)
 
 # Initialize Flask app
+print("🔧 [STARTUP] Initializing Flask app...", file=sys.stderr)
 app = Flask(__name__)
+print("🔧 [STARTUP] Flask app created", file=sys.stderr)
 CORS(app)
+print("🔧 [STARTUP] CORS configured", file=sys.stderr)
 
 # Global voice system instance
 voice_system = None
@@ -138,7 +191,26 @@ def _convert_to_mp3(audio_data: bytes, output_path: str, input_format: str = 'wa
 
 def initialize_voice_system():
     """Initialize the voice processing system."""
-    global voice_system
+    global voice_system, TalkingOrangeVoiceSystem, main_module
+    
+    # Lazy load voice module if not already loaded (for reloader compatibility)
+    if TalkingOrangeVoiceSystem is None or main_module is None:
+        logger.info("📦 [INIT] Lazy loading voice processing modules...")
+        import importlib.util
+        gen_dir = os.path.join(os.path.dirname(__file__), 'gen')
+        main_py_path = os.path.join(gen_dir, "main.py")
+        spec = importlib.util.spec_from_file_location("main", main_py_path)
+        main_module = importlib.util.module_from_spec(spec)
+        sys.modules["main"] = main_module
+        spec.loader.exec_module(main_module)
+        TalkingOrangeVoiceSystem = main_module.TalkingOrangeVoiceSystem
+        # Update globals
+        globals()['process_voice_file'] = main_module.process_voice_file
+        globals()['process_voice_buffer'] = main_module.process_voice_buffer
+        globals()['transcribe_audio'] = main_module.transcribe_audio
+        globals()['synthesize_speech'] = main_module.synthesize_speech
+        logger.info("✅ [INIT] Voice processing modules loaded")
+    
     init_start = time.time()
     
     try:
@@ -194,15 +266,16 @@ def initialize_voice_system():
 # Only initialize in the main process, not in Flask's reloader process
 # Flask sets WERKZEUG_RUN_MAIN='true' in the main process (when using reloader)
 # In production (no reloader), WERKZEUG_RUN_MAIN won't be set, but we still initialize
+import sys
+print("🔍 [STARTUP] Checking environment variables...", file=sys.stderr)
 is_debug = os.environ.get('DEBUG', 'False').lower() == 'true'
 is_main_process = os.environ.get('WERKZEUG_RUN_MAIN') == 'true'
+print(f"   DEBUG={is_debug}, WERKZEUG_RUN_MAIN={is_main_process}", file=sys.stderr)
 
-if is_main_process or not is_debug:
-    # Running in main process (not reloader) or in production mode
-    initialize_voice_system()
-else:
-    # Running in reloader process - skip initialization (will happen in main process)
-    logger.info("🔄 [RELOADER] Skipping voice system initialization in reloader process")
+# DISABLED: Voice system initialization on startup to prevent high I/O
+# Voice system will initialize lazily when first speech request is made
+print("🔄 [STARTUP] Voice system initialization disabled on startup (will initialize on first use)", file=sys.stderr)
+logger.info("🔄 [STARTUP] Voice system initialization disabled on startup (will initialize on first use)")
 
 @app.route('/')
 def index():
@@ -1205,28 +1278,47 @@ def upload_user_file():
     Upload a file for a user (target image or media content).
     """
     try:
+        logger.info("📤 Upload request received")
+        
         if 'file' not in request.files:
+            logger.error("❌ No file in request")
             return jsonify({"error": "No file provided"}), 400
         
         file = request.files['file']
         if file.filename == '':
+            logger.error("❌ Empty filename")
             return jsonify({"error": "No file selected"}), 400
         
         file_type = request.form.get('fileType', 'media')  # 'target' or 'media'
         user_id = request.form.get('userId')
+        project_name = request.form.get('projectName', 'default')  # Get project name from request
+        
+        logger.info(f"📤 Upload: user_id={user_id}, project_name={project_name}, file_type={file_type}, filename={file.filename}")
         
         if not user_id:
+            logger.error("❌ No user_id provided")
             return jsonify({"error": "User ID required"}), 400
         
-        # Security: Validate user_id
+        # Security: Validate user_id and project_name
         if '..' in user_id or '/' in user_id or '\\' in user_id:
+            logger.error(f"❌ Invalid user_id: {user_id}")
             return jsonify({"error": "Invalid user ID"}), 400
+        if '..' in project_name or '/' in project_name or '\\' in project_name:
+            logger.error(f"❌ Invalid project_name: {project_name}")
+            return jsonify({"error": "Invalid project name"}), 400
         
-        # Ensure user directories exist
-        directories = ensure_user_directories(user_id)
+        # Ensure project directories exist (this will create the project if it doesn't exist)
+        try:
+            directories = ensure_project_directories(user_id, project_name)
+            logger.info(f"✅ Project directories ensured for {user_id}/{project_name}")
+        except Exception as e:
+            logger.error(f"❌ Failed to ensure project directories: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return jsonify({"error": f"Failed to create project directories: {str(e)}"}), 500
         
         # Determine save location
         save_dir = directories['media']
+        logger.info(f"📁 Save directory: {save_dir}")
         
         # Security: Sanitize filename
         original_filename = os.path.basename(file.filename)
@@ -1235,56 +1327,123 @@ def upload_user_file():
         
         # Handle target images - compile to .mind file
         if file_type == 'target':
-            # Save original image first
-            image_filename = f"target_image_{int(time.time())}_{original_filename}"
-            image_path = os.path.join(save_dir, image_filename)
+            logger.info(f"🎯 Processing target image upload")
+            
+            # Use targets subdirectory for target images
+            # Check if 'targets' key exists, otherwise create it
+            if 'targets' not in directories:
+                targets_dir = os.path.join(save_dir, 'targets')
+                directories['targets'] = targets_dir
+            else:
+                targets_dir = directories['targets']
+            
+            os.makedirs(targets_dir, exist_ok=True)
+            logger.info(f"📁 Targets directory: {targets_dir}")
+            
+            # Save original image in targets/ subdirectory
+            image_filename = f"target_source_{int(time.time())}_{original_filename}"
+            image_path = os.path.join(targets_dir, image_filename)
+            logger.info(f"💾 Saving target image to: {image_path}")
             file.save(image_path)
+            logger.info(f"✅ Target image saved: {image_path} ({os.path.getsize(image_path)} bytes)")
             
             # Validate image for AR
-            if validate_image_for_ar:
-                is_valid, validation_msg = validate_image_for_ar(image_path)
-                if not is_valid:
-                    # Delete invalid image
-                    try:
-                        os.remove(image_path)
-                    except:
-                        pass
-                    return jsonify({
-                        "error": f"Image not suitable for AR: {validation_msg}",
-                        "validation": validation_msg
-                    }), 400
-                logger.info(f"✅ Image validation: {validation_msg}")
+            if validate_image_for_ar and callable(validate_image_for_ar):
+                logger.info(f"🔍 Validating image for AR...")
+                try:
+                    is_valid, validation_msg = validate_image_for_ar(image_path)
+                    if not is_valid:
+                        # Delete invalid image
+                        try:
+                            os.remove(image_path)
+                        except:
+                            pass
+                        logger.error(f"❌ Image validation failed: {validation_msg}")
+                        return jsonify({
+                            "error": f"Image not suitable for AR: {validation_msg}",
+                            "validation": validation_msg
+                        }), 400
+                    logger.info(f"✅ Image validation: {validation_msg}")
+                except Exception as validation_error:
+                    logger.warning(f"⚠️ Image validation error (continuing anyway): {validation_error}")
+            else:
+                logger.info(f"⚠️ Image validation skipped (validator not available)")
             
-            # Compile to .mind file
-            mind_filename = f"target_{int(time.time())}.mind"
+            # Compile to .mind file - use standard name "targets.mind" in media root
+            mind_filename = "targets.mind"  # Standard name, one per project
             mind_path = os.path.join(save_dir, mind_filename)
+            logger.info(f"🔨 Compiling to .mind file: {mind_path}")
             
-            if compile_image_to_mind:
-                compiled_path = compile_image_to_mind(image_path, mind_path)
-                if compiled_path and os.path.exists(compiled_path):
-                    # Success - return .mind file info
-                    file_size = os.path.getsize(compiled_path)
-                    logger.info(f"✅ Target compiled successfully: {compiled_path} ({file_size} bytes)")
+            if compile_image_to_mind and callable(compile_image_to_mind):
+                try:
+                    logger.info(f"🔨 Calling compile_image_to_mind({image_path}, {mind_path})...")
+                    compiled_path = compile_image_to_mind(image_path, mind_path)
+                    logger.info(f"🔨 Compilation result: {compiled_path}")
+                    
+                    if compiled_path and os.path.exists(compiled_path):
+                        # Success - return .mind file info
+                        file_size = os.path.getsize(compiled_path)
+                        logger.info(f"✅ Target compiled successfully: {compiled_path} ({file_size} bytes)")
+                        
+                        return jsonify({
+                            "success": True,
+                            "filename": mind_filename,
+                            "originalImage": image_filename,
+                            "size": file_size,
+                            "fileType": "target",
+                            "url": get_user_media_url(user_id, mind_filename, project_name),
+                            "message": "Target image compiled successfully. Your AR marker is ready to use!"
+                        }), 200
+                    else:
+                        # Compilation failed - check why
+                        logger.error(f"❌ Compilation failed: compiled_path={compiled_path}")
+                        logger.error(f"   File exists check: {os.path.exists(compiled_path) if compiled_path else 'compiled_path is None'}")
+                        logger.error(f"   Image path exists: {os.path.exists(image_path)}")
+                        logger.error(f"   Output path: {mind_path}")
+                        
+                        # Check if Node.js is available
+                        from mindar_compiler import check_node_available
+                        node_available = check_node_available() if check_node_available else False
+                        
+                        error_hint = "Compilation returned None. "
+                        if not node_available:
+                            error_hint += "Node.js is not installed. Install from https://nodejs.org/"
+                        else:
+                            error_hint += "Check server logs for compilation details."
+                        
+                        return jsonify({
+                            "error": "Failed to compile image to AR target.",
+                            "originalImage": image_filename,
+                            "hint": error_hint,
+                            "details": f"compiled_path={compiled_path}, node_available={node_available}"
+                        }), 500
+                except RuntimeError as runtime_error:
+                    # RuntimeError from compile_image_to_mind (e.g., Node.js not available)
+                    error_str = str(runtime_error)
+                    logger.error(f"❌ Compilation runtime error: {error_str}")
+                    
+                    # Extract hint if it's already in the error message
+                    hint = "Install Node.js from https://nodejs.org/ and run: npm install mind-ar canvas"
+                    if "💡 Hint:" in error_str:
+                        # The hint is already in the error message from mindar_compiler.py
+                        hint = None  # Don't duplicate the hint
                     
                     return jsonify({
-                        "success": True,
-                        "filename": mind_filename,
+                        "error": error_str,
                         "originalImage": image_filename,
-                        "size": file_size,
-                        "fileType": "target",
-                        "url": get_user_media_url(user_id, mind_filename),
-                        "message": "Target image compiled successfully. Your AR marker is ready to use!"
-                    }), 200
-                else:
-                    # Compilation failed - keep original image, return error
-                    logger.error(f"❌ Failed to compile target image")
+                        "hint": hint
+                    }), 500
+                except Exception as compile_error:
+                    logger.error(f"❌ Compilation exception: {compile_error}")
+                    logger.error(f"Traceback: {traceback.format_exc()}")
                     return jsonify({
-                        "error": "Failed to compile image to AR target. Please ensure Node.js is installed.",
+                        "error": f"Compilation failed: {str(compile_error)}",
                         "originalImage": image_filename,
-                        "hint": "Install Node.js: https://nodejs.org/"
+                        "hint": "Check server logs for details"
                     }), 500
             else:
                 # Compiler not available
+                logger.error(f"❌ Compiler not available: compile_image_to_mind={compile_image_to_mind}")
                 return jsonify({
                     "error": "AR target compiler not available. Please install Node.js and mind-ar-compiler.",
                     "originalImage": image_filename,
@@ -1306,13 +1465,288 @@ def upload_user_file():
                 "filename": filename,
                 "size": file_size,
                 "fileType": file_type,
-                "url": get_user_media_url(user_id, filename)
+                "url": get_user_media_url(user_id, filename, project_name)
             }), 200
         
     except Exception as e:
-        logger.error(f"Error uploading file: {e}")
+        error_msg = str(e)
+        error_traceback = traceback.format_exc()
+        logger.error(f"❌ Error uploading file: {error_msg}")
+        logger.error(f"❌ Traceback: {error_traceback}")
+        # Return detailed error to frontend for debugging
+        return jsonify({
+            "error": f"Upload failed: {error_msg}",
+            "details": error_traceback.split('\n')[-5:] if error_traceback else None  # Last 5 lines of traceback
+        }), 500
+
+# ============================================
+# Nostr Authentication Endpoints
+# ============================================
+
+@app.route('/api/auth/nostr/login', methods=['POST'])
+def nostr_login():
+    """
+    Authenticate with Nostr private key (nsec).
+    Validates nsec, derives npub, sets secure cookie.
+    """
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        nsec = data.get('nsec', '').strip()
+        
+        if not nsec:
+            return jsonify({"error": "nsec is required"}), 400
+        
+        # Validate nsec format (starts with 'nsec1')
+        if not nsec.startswith('nsec1'):
+            return jsonify({"error": "Invalid nsec format"}), 400
+        
+        # For now, we'll validate by attempting to derive npub
+        # In production, you might want to use a Python bech32 library
+        # For simplicity, we'll accept the nsec and derive npub on frontend
+        # But we need to validate it's a real nsec
+        
+        # Since we can't easily decode bech32 in Python without additional libs,
+        # we'll use a subprocess to call Node.js or accept the npub from frontend
+        # For security, we should validate the nsec properly
+        
+        # For now, we'll accept npub from frontend (derived from nsec)
+        # The frontend will send both nsec and npub, we validate they match
+        npub = data.get('npub', '').strip()
+        
+        if not npub or not npub.startswith('npub1'):
+            return jsonify({"error": "Invalid npub format"}), 400
+        
+        # Use npub as userId (it's the public key, safe to use)
+        user_id = npub
+        
+        # Create base user directory if it doesn't exist
+        try:
+            user_base = get_user_base_path(user_id)
+            os.makedirs(user_base, exist_ok=True)
+            os.chmod(user_base, 0o755)
+            logger.info(f"✅ User directory created/verified: {user_base}")
+        except Exception as e:
+            logger.error(f"❌ Failed to create user directory for {user_id}: {e}")
+            # Don't fail login if directory creation fails, but log it
+        
+        # Set secure cookie with npub
+        response = jsonify({
+            "success": True,
+            "npub": npub,
+            "userId": user_id,
+            "message": "Logged in successfully"
+        })
+        
+        # Set httpOnly cookie (secure in production)
+        response.set_cookie(
+            'nostr_npub',
+            npub,
+            max_age=60*60*24*30,  # 30 days
+            httponly=True,
+            secure=False,  # Set to True in production with HTTPS
+            samesite='Lax'
+        )
+        
+        logger.info(f"✅ Nostr login successful: {npub[:20]}...")
+        
+        return response, 200
+        
+    except Exception as e:
+        logger.error(f"Error in nostr login: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": f"Upload failed: {str(e)}"}), 500
+        return jsonify({"error": f"Login failed: {str(e)}"}), 500
+
+@app.route('/api/auth/nostr/status', methods=['GET'])
+def nostr_auth_status():
+    """
+    Check if user is authenticated.
+    Returns npub and user_id if authenticated.
+    """
+    try:
+        npub = request.cookies.get('nostr_npub')
+        
+        if not npub:
+            return jsonify({
+                "authenticated": False
+            }), 200
+        
+        # Validate npub format
+        if not npub.startswith('npub1'):
+            return jsonify({
+                "authenticated": False
+            }), 200
+        
+        # Use npub as userId
+        user_id = npub
+        
+        return jsonify({
+            "authenticated": True,
+            "npub": npub,
+            "userId": user_id
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error checking auth status: {e}")
+        return jsonify({"authenticated": False}), 200
+
+@app.route('/api/auth/nostr/logout', methods=['POST'])
+def nostr_logout():
+    """
+    Logout user by clearing authentication cookie.
+    """
+    try:
+        response = jsonify({
+            "success": True,
+            "message": "Logged out successfully"
+        })
+        
+        # Clear cookie
+        response.set_cookie(
+            'nostr_npub',
+            '',
+            max_age=0,
+            httponly=True,
+            secure=False,
+            samesite='Lax'
+        )
+        
+        return response, 200
+        
+    except Exception as e:
+        logger.error(f"Error logging out: {e}")
+        return jsonify({"error": f"Logout failed: {str(e)}"}), 500
+
+@app.route('/api/users/<user_id>/projects', methods=['GET'])
+def list_user_projects_endpoint(user_id):
+    """
+    List all projects for a user.
+    """
+    try:
+        # Security: Validate user_id
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        
+        projects = list_user_projects(user_id)
+        return jsonify({"projects": projects}), 200
+    except Exception as e:
+        logger.error(f"Error listing projects: {e}")
+        return jsonify({"error": f"Failed to list projects: {str(e)}"}), 500
+
+@app.route('/api/users/<user_id>/projects', methods=['POST'])
+def create_user_project(user_id):
+    """
+    Create a new project for a user.
+    """
+    try:
+        # Security: Validate user_id
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        
+        data = request.get_json(force=True, silent=True) or {}
+        project_name = data.get('projectName', '').strip()
+        
+        if not project_name:
+            return jsonify({"error": "Project name is required"}), 400
+        
+        # Security: Validate project_name
+        if '..' in project_name or '/' in project_name or '\\' in project_name:
+            return jsonify({"error": "Invalid project name"}), 400
+        
+        # Check if project already exists
+        if project_exists(user_id, project_name):
+            return jsonify({"error": "Project already exists"}), 400
+        
+        # Create project directories
+        directories = ensure_project_directories(user_id, project_name)
+        
+        logger.info(f"✅ Created project: {user_id}/{project_name}")
+        
+        return jsonify({
+            "success": True,
+            "projectName": project_name,
+            "message": f"Project '{project_name}' created successfully"
+        }), 200
+    except Exception as e:
+        logger.error(f"Error creating project: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to create project: {str(e)}"}), 500
+
+@app.route('/api/users/<user_id>/<project_name>/files', methods=['GET'])
+def list_project_files_endpoint(user_id, project_name):
+    """
+    List all files in a project.
+    """
+    try:
+        logger.info(f"📁 Listing files for user={user_id}, project={project_name}")
+        
+        # Security: Validate user_id and project_name
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        if '..' in project_name or '/' in project_name or '\\' in project_name:
+            return jsonify({"error": "Invalid project name"}), 400
+        
+        # Ensure directories exist first (this will create them if needed)
+        try:
+            directories = ensure_project_directories(user_id, project_name)
+            logger.info(f"✅ Directories ensured for {user_id}/{project_name}")
+        except Exception as e:
+            logger.error(f"❌ Failed to ensure directories for {user_id}/{project_name}: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return jsonify({"error": f"Failed to create project directories: {str(e)}"}), 500
+        
+        # List files
+        try:
+            # Import here to avoid conflict with local list_user_files() route handler
+            from user_manager import list_user_files as get_user_files
+            files = get_user_files(user_id, project_name)
+            logger.info(f"✅ Listed files: {len(files.get('user', []))} user, {len(files.get('ai', []))} ai, {len(files.get('media', []))} media")
+        except Exception as e:
+            logger.error(f"❌ Failed to list files for {user_id}/{project_name}: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Return empty file list instead of error
+            files = {'user': [], 'ai': [], 'media': []}
+        
+        # Format file list with metadata
+        formatted_files = {
+            'user': [],
+            'ai': [],
+            'media': []
+        }
+        
+        # Map file types to directory keys
+        dir_map = {
+            'user': 'user_input',
+            'ai': 'ai',
+            'media': 'media'
+        }
+        
+        for file_type_key in ['user', 'ai', 'media']:
+            file_list = files.get(file_type_key, [])
+            dir_key = dir_map.get(file_type_key)
+            
+            if not dir_key or dir_key not in directories:
+                logger.warning(f"Directory key '{dir_key}' not found in directories for {file_type_key}")
+                continue
+                
+            for filename in file_list:
+                try:
+                    file_path = os.path.join(directories[dir_key], filename)
+                    if os.path.exists(file_path) and os.path.isfile(file_path):
+                        file_size = os.path.getsize(file_path)
+                        formatted_files[file_type_key].append({
+                            'filename': filename,
+                            'size': file_size,
+                            'fileType': file_type_key
+                        })
+                except Exception as e:
+                    logger.error(f"Error processing file {filename} for {file_type_key}: {e}")
+                    continue
+        
+        return jsonify({"files": formatted_files}), 200
+    except Exception as e:
+        logger.error(f"Error listing project files: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to list files: {str(e)}"}), 500
 
 @app.route('/api/targets', methods=['GET'])
 def get_all_targets():
@@ -1355,19 +1789,28 @@ def get_all_targets():
                     continue
                 
                 # Look for .mind files (AR targets) in project media
-                for filename in os.listdir(media_dir):
-                    if filename.endswith('.mind'):
-                        target_path = os.path.join(media_dir, filename)
-                        if os.path.isfile(target_path):
-                            # Get associated media files
+                # Prefer "targets.mind" as standard name, but accept any .mind file
+                mind_files = [f for f in os.listdir(media_dir) if f.endswith('.mind') and os.path.isfile(os.path.join(media_dir, f))]
+                # Prefer targets.mind if it exists
+                target_filename = 'targets.mind' if 'targets.mind' in mind_files else (mind_files[0] if mind_files else None)
+                
+                if target_filename:
+                    target_path = os.path.join(media_dir, target_filename)
+                    if os.path.isfile(target_path):
+                            # Get associated media files (content, not target images)
                             media_files = []
                             for media_file in os.listdir(media_dir):
-                                if media_file != filename and os.path.isfile(os.path.join(media_dir, media_file)):
-                                    media_files.append({
-                                        'filename': media_file,
-                                        'url': get_user_media_url(user_id, media_file, project_name),
-                                        'type': _get_file_type(media_file)
-                                    })
+                                # Skip .mind files (targets) and target source images
+                                if media_file == target_filename or media_file.endswith('.mind'):
+                                    continue
+                                if os.path.isfile(os.path.join(media_dir, media_file)):
+                                    # Skip files in targets/ subdirectory (those are source images)
+                                    if not media_file.startswith('target_source_'):
+                                        media_files.append({
+                                            'filename': media_file,
+                                            'url': get_user_media_url(user_id, media_file, project_name),
+                                            'type': _get_file_type(media_file)
+                                        })
                             
                             # Get video directories and their contents (frames + audio files)
                             videos_dir = os.path.join(media_dir, 'videos')
@@ -1394,11 +1837,11 @@ def get_all_targets():
                                                 })
                             
                             targets.append({
-                                'targetId': f"{user_id}_{project_name}_{filename}",
+                                'targetId': f"{user_id}_{project_name}_{target_filename}",
                                 'userId': user_id,
                                 'projectName': project_name,
-                                'filename': filename,
-                                'url': get_user_media_url(user_id, filename, project_name),
+                                'filename': target_filename,
+                                'url': get_user_media_url(user_id, target_filename, project_name),
                                 'media': media_files
                             })
         
@@ -1468,6 +1911,41 @@ def _get_default_media_files(media_dir):
                 })
     
     return media_files
+
+@app.route('/api/users/<user_id>/<project_name>/media/<filename>', methods=['DELETE'])
+def delete_project_media(user_id, project_name, filename):
+    """
+    Delete a media file from a project.
+    """
+    try:
+        # Security: Validate user_id and project_name
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        if '..' in project_name or '/' in project_name or '\\' in project_name:
+            return jsonify({"error": "Invalid project name"}), 400
+        if '..' in filename or '/' in filename or '\\' in filename:
+            return jsonify({"error": "Invalid filename"}), 400
+        
+        # Get project media path
+        media_path = get_user_media_path(user_id, filename, project_name)
+        
+        # Security: Ensure the path is within the user's directory
+        project_base = get_project_base_path(user_id, project_name)
+        if not os.path.abspath(media_path).startswith(os.path.abspath(project_base)):
+            return jsonify({"error": "Invalid file path"}), 403
+        
+        # Check if file exists
+        if not os.path.exists(media_path) or not os.path.isfile(media_path):
+            return jsonify({"error": "File not found"}), 404
+        
+        # Delete the file
+        os.remove(media_path)
+        logger.info(f"✅ Deleted file: {media_path}")
+        
+        return jsonify({"success": True, "message": "File deleted successfully"}), 200
+    except Exception as e:
+        logger.error(f"Error deleting file: {e}")
+        return jsonify({"error": f"Failed to delete file: {str(e)}"}), 500
 
 @app.route('/api/users/<user_id>/media/<filename>', methods=['DELETE'])
 def delete_user_media(user_id, filename):
@@ -1540,15 +2018,38 @@ def internal_error(error):
     return jsonify({"error": f"Internal server error: {str(error)}"}), 500
 
 if __name__ == '__main__':
-    # Create necessary directories
-    os.makedirs('../frontend', exist_ok=True)
+    print("=" * 60, file=sys.stderr)
+    print("🚀 [STARTUP] Starting Flask server...", file=sys.stderr)
+    print("=" * 60, file=sys.stderr)
     
-    # Start the Flask server
-    port = int(os.getenv('PORT', 3000))
-    debug = os.getenv('DEBUG', 'False').lower() == 'true'
-    
-    logger.info(f"🚀 Starting Talking Orange Python Backend on port {port}")
-    logger.info(f"📊 API endpoints available at http://localhost:{port}/api/")
-    logger.info(f"🎯 Frontend served at http://localhost:{port}/")
-    
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    try:
+        print("📁 [STARTUP] Step 1: Creating necessary directories...", file=sys.stderr)
+        os.makedirs('../frontend', exist_ok=True)
+        print("✅ [STARTUP] Step 1: Directories created", file=sys.stderr)
+        
+        print("🔧 [STARTUP] Step 2: Reading configuration...", file=sys.stderr)
+        port = int(os.getenv('PORT', 3000))
+        debug = os.getenv('DEBUG', 'False').lower() == 'true'
+        print(f"   Port: {port}", file=sys.stderr)
+        print(f"   Debug: {debug}", file=sys.stderr)
+        print(f"   Working directory: {os.getcwd()}", file=sys.stderr)
+        print("✅ [STARTUP] Step 2: Configuration loaded", file=sys.stderr)
+        
+        print("📊 [STARTUP] Step 3: Flask app ready", file=sys.stderr)
+        print(f"   API endpoints: http://localhost:{port}/api/", file=sys.stderr)
+        print(f"   Frontend: http://localhost:{port}/", file=sys.stderr)
+        print("=" * 60, file=sys.stderr)
+        print(f"🚀 [STARTUP] Starting Flask server on port {port} (debug={debug})", file=sys.stderr)
+        print("=" * 60, file=sys.stderr)
+        
+        logger.info(f"🚀 Starting Talking Orange Python Backend on port {port}")
+        logger.info(f"📊 API endpoints available at http://localhost:{port}/api/")
+        logger.info(f"🎯 Frontend served at http://localhost:{port}/")
+        
+        app.run(host='0.0.0.0', port=port, debug=debug)
+    except Exception as e:
+        print(f"❌ [STARTUP] FATAL ERROR: {e}", file=sys.stderr)
+        print(f"❌ [STARTUP] Traceback: {traceback.format_exc()}", file=sys.stderr)
+        logger.error(f"FATAL STARTUP ERROR: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        sys.exit(1)

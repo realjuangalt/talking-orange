@@ -98,6 +98,11 @@ function setupTrackingSystem(marker, orangePlane) {
         const currentTarget = window.currentTarget;
         console.log('🔍 [TRACKING] currentTarget in targetFound:', currentTarget);
         
+        // Lock onto this target (Artivive-style: stop cycling, we found a match)
+        if (typeof window.lockTarget === 'function') {
+            window.lockTarget(currentTarget);
+        }
+        
         // Load project-specific UI and modules on first detection (only once)
         if (consecutiveFrames === 1 && currentTarget) {
             // Debug: Log target structure

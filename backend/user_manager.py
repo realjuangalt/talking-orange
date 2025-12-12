@@ -12,6 +12,7 @@ Directory structure:
 
 import os
 import logging
+import traceback
 from pathlib import Path
 from typing import Optional
 
@@ -78,6 +79,7 @@ def ensure_project_directories(user_id: str, project_name: str) -> dict:
         'user_input': os.path.join(project_base, 'user-input'),
         'ai': os.path.join(project_base, 'ai'),
         'media': os.path.join(project_base, 'media'),
+        'targets': os.path.join(project_base, 'media', 'targets'),  # Target images and .mind files
         'prompts': os.path.join(project_base, 'prompts')
     }
     
@@ -86,10 +88,15 @@ def ensure_project_directories(user_id: str, project_name: str) -> dict:
         try:
             os.makedirs(path, exist_ok=True)
             # Set permissions (755)
-            os.chmod(path, 0o755)
+            try:
+                os.chmod(path, 0o755)
+            except Exception as chmod_error:
+                # chmod might fail on some systems, but that's okay
+                logger.warning(f"⚠️ Could not set permissions for {path}: {chmod_error}")
             logger.debug(f"✅ Project directory created/verified: {name} = {path}")
         except Exception as e:
             logger.error(f"❌ Failed to create project directory {name} at {path}: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             raise
     
     return directories
@@ -309,15 +316,40 @@ def list_user_files(user_id: str, project_name: Optional[str] = None, file_type:
     
     if file_type in ['all', 'user']:
         user_dir = directories['user_input']
-        result['user'] = [f for f in os.listdir(user_dir) if os.path.isfile(os.path.join(user_dir, f))] if os.path.exists(user_dir) else []
+        if os.path.exists(user_dir):
+            try:
+                result['user'] = [f for f in os.listdir(user_dir) if os.path.isfile(os.path.join(user_dir, f))]
+            except Exception as e:
+                logger.error(f"Error listing user files in {user_dir}: {e}")
+                result['user'] = []
+        else:
+            result['user'] = []
     
     if file_type in ['all', 'ai']:
         ai_dir = directories['ai']
-        result['ai'] = [f for f in os.listdir(ai_dir) if os.path.isfile(os.path.join(ai_dir, f))] if os.path.exists(ai_dir) else []
+        if os.path.exists(ai_dir):
+            try:
+                result['ai'] = [f for f in os.listdir(ai_dir) if os.path.isfile(os.path.join(ai_dir, f))]
+            except Exception as e:
+                logger.error(f"Error listing AI files in {ai_dir}: {e}")
+                result['ai'] = []
+        else:
+            result['ai'] = []
     
     if file_type in ['all', 'media']:
         media_dir = directories['media']
-        result['media'] = [f for f in os.listdir(media_dir) if os.path.isfile(os.path.join(media_dir, f))] if os.path.exists(media_dir) else []
+        if os.path.exists(media_dir):
+            try:
+                # List only files, not directories
+                # Exclude target source images (they're in targets/ subdirectory or have target_source_ prefix)
+                all_files = [f for f in os.listdir(media_dir) if os.path.isfile(os.path.join(media_dir, f))]
+                # Filter out target source images and only include content files
+                result['media'] = [f for f in all_files if not f.startswith('target_source_')]
+            except Exception as e:
+                logger.error(f"Error listing media files in {media_dir}: {e}")
+                result['media'] = []
+        else:
+            result['media'] = []
     
     return result
 

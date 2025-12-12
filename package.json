@@ -2,6 +2,7 @@
   "name": "talking-orange",
   "version": "1.0.0",
   "description": "AR Bitcoin evangelism tool with 3D talking orange character",
+  "type": "module",
   "main": "start_backend.py",
   "scripts": {
     "start": "python3 start_backend.py",
@@ -24,5 +25,14 @@
   "private": true,
   "engines": {
     "python": ">=3.8"
+  },
+  "dependencies": {
+    "@maherboughdiri/mind-ar-compiler": "^1.0.1",
+    "@tensorflow/tfjs-node": "^4.22.0",
+    "canvas": "^3.2.0",
+    "jsdom": "^27.3.0",
+    "mind-ar": "^1.2.5",
+    "puppeteer": "^24.33.0",
+    "sharp": "^0.34.5"
   }
 }
