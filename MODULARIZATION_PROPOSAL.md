@@ -261,6 +261,9 @@ Project Folder (backend/users/{user_id}/{project_name}/js/)
 4. **Easier testing** - Can test modules independently
 5. **Reduced cognitive load** - Don't need to scroll through 3k lines
 6. **Clearer dependencies** - See what depends on what
+7. **Project-specific customization** - Animation and voice modules can be customized per project
+8. **Cleaner core** - Core AR functionality separated from project-specific features
+9. **Better scalability** - New projects can have their own animation/voice systems without cluttering core code
 
 ---
 
