@@ -30,10 +30,8 @@ class SchemaLoader:
         self.schemas_dir = Path(schemas_dir)
         self._cache = {}
         
-        # Create schemas directory if it doesn't exist (optional, only needed if schemas are used)
-        if not self.schemas_dir.exists():
-            self.schemas_dir.mkdir(parents=True, exist_ok=True)
-            logger.warning(f"Schemas directory created (empty): {self.schemas_dir}. Add schema .json files if needed.")
+        # Note: Schemas directory must exist and contain schema files to be used
+        # No automatic creation - schemas should be provided by the project or manually added
     
     def load_schema(self, filename: str) -> Dict[str, Any]:
         """

@@ -38,6 +38,35 @@ process_voice_buffer = main_module.process_voice_buffer
 transcribe_audio = main_module.transcribe_audio
 synthesize_speech = main_module.synthesize_speech
 
+# Import user management module
+from user_manager import (
+    ensure_user_directories,
+    ensure_project_directories,
+    get_user_audio_path,
+    get_user_media_path,
+    get_user_audio_url,
+    get_user_media_url,
+    get_user_id_from_session,
+    get_user_base_path,
+    get_project_base_path,
+    user_exists,
+    project_exists,
+    list_user_projects,
+    detect_project_from_path
+)
+
+# Import MindAR compiler
+try:
+    from mindar_compiler import compile_image_to_mind, validate_image_for_ar, check_node_available
+    MINDAR_COMPILER_AVAILABLE = True
+except ImportError as e:
+    # Logger might not be initialized yet, use print for early errors
+    print(f"⚠️ mindar_compiler module not available: {e}")
+    MINDAR_COMPILER_AVAILABLE = False
+    compile_image_to_mind = None
+    validate_image_for_ar = None
+    check_node_available = None
+
 # Load environment variables from project root
 project_root = os.path.dirname(os.path.dirname(__file__))
 env_path = os.path.join(project_root, '.env')
@@ -162,7 +191,18 @@ def initialize_voice_system():
         voice_system = None
 
 # Initialize voice system on startup
-initialize_voice_system()
+# Only initialize in the main process, not in Flask's reloader process
+# Flask sets WERKZEUG_RUN_MAIN='true' in the main process (when using reloader)
+# In production (no reloader), WERKZEUG_RUN_MAIN won't be set, but we still initialize
+is_debug = os.environ.get('DEBUG', 'False').lower() == 'true'
+is_main_process = os.environ.get('WERKZEUG_RUN_MAIN') == 'true'
+
+if is_main_process or not is_debug:
+    # Running in main process (not reloader) or in production mode
+    initialize_voice_system()
+else:
+    # Running in reloader process - skip initialization (will happen in main process)
+    logger.info("🔄 [RELOADER] Skipping voice system initialization in reloader process")
 
 @app.route('/')
 def index():
@@ -280,6 +320,7 @@ def process_speech():
         text = data.get('text', '')
         audio_data = data.get('audioData', '')
         session_id = data.get('sessionId', 'anonymous')
+        project_name = data.get('projectName', 'default')  # Get project name from request
         language = data.get('language', 'en')
         tts_voice = data.get('ttsVoice', 'default')
         tts_engine = data.get('ttsEngine', 'auto')
@@ -324,13 +365,14 @@ def process_speech():
                 logger.info(f"🔊 Audio buffer type: {type(audio_buffer)}")
                 logger.info(f"🔊 First 20 bytes: {audio_buffer[:20] if len(audio_buffer) > 20 else audio_buffer}")
                 
-                # Save user audio input to data/user/ with timestamp
-                # Use absolute path to avoid issues with working directory
-                backend_dir = os.path.dirname(os.path.abspath(__file__))
-                data_user_dir = os.path.join(backend_dir, 'data', 'user')
-                user_audio_filename = f"user_input_{session_id}_{int(time.time())}.webm"
-                user_audio_path = os.path.join(data_user_dir, user_audio_filename)
-                os.makedirs(data_user_dir, exist_ok=True)
+                # Get user ID from session
+                user_id = get_user_id_from_session(session_id)
+                logger.info(f"👤 User ID: {user_id}, Project: {project_name}")
+                
+                # Save user audio input to project-specific directory
+                user_audio_filename = f"user_input_{int(time.time())}.webm"
+                user_audio_path = get_user_audio_path(user_id, user_audio_filename, 'user', project_name)
+                ensure_project_directories(user_id, project_name)  # Ensure project directories exist
                 
                 try:
                     with open(user_audio_path, 'wb') as f:
@@ -348,7 +390,7 @@ def process_speech():
                 logger.info(f"🎤 [API] Language: {language}, TTS voice: {tts_voice}, TTS engine: {tts_engine}")
                 
                 result = voice_system.process_voice_input_sync(
-                    audio_buffer, language, tts_voice, tts_engine
+                    audio_buffer, language, tts_voice, tts_engine, user_id, project_name
                 )
                 
                 api_duration = round(time.time() - api_start, 2)
@@ -374,19 +416,23 @@ def process_speech():
         elif text:
             # Process text input
             logger.info(f"📝 Processing text input: {text[:50]}...")
+            # Get user ID from session for project context
+            user_id = get_user_id_from_session(session_id)
             result = voice_system.process_voice_input_sync(
-                text, language, tts_voice, tts_engine
+                text, language, tts_voice, tts_engine, user_id, project_name
             )
         else:
             logger.error("❌ No text or audio provided")
             return jsonify({"error": "No text or audio provided"}), 400
         
-        # Save AI audio response to data/ai/ with timestamp (as MP3)
-        # Use absolute path to avoid issues with working directory
-        backend_dir = os.path.dirname(os.path.abspath(__file__))
-        data_ai_dir = os.path.join(backend_dir, 'data', 'ai')
-        audio_filename = f"ai_response_{session_id}_{int(time.time())}.mp3"
-        audio_path = os.path.join(data_ai_dir, audio_filename)
+        # Get user ID from session and project name
+        user_id = get_user_id_from_session(session_id)
+        project_name = data.get('projectName', 'default')
+        
+        # Save AI audio response to project-specific directory (as MP3)
+        audio_filename = f"ai_response_{int(time.time())}.mp3"
+        audio_path = get_user_audio_path(user_id, audio_filename, 'ai', project_name)
+        ensure_project_directories(user_id, project_name)  # Ensure project directories exist
         
         logger.info(f"💾 Saving audio response...")
         logger.info(f"📁 Audio filename: {audio_filename}")
@@ -511,7 +557,8 @@ def process_speech():
         
         # Add audioUrl only if we successfully saved the file
         if audio_filename:
-            response_data["audioUrl"] = f"/data/ai/{audio_filename}"
+            response_data["audioUrl"] = get_user_audio_url(user_id, audio_filename, 'ai', project_name)
+            response_data["userId"] = user_id  # Include user ID in response
             logger.info(f"✅ [AUDIO SAVE] audioUrl added to response: {response_data['audioUrl']}")
         else:
             logger.warning("⚠️ [AUDIO SAVE] No audio file saved, skipping audioUrl in response")
@@ -591,6 +638,10 @@ def synthesize_speech_endpoint():
         if not voice_system:
             return jsonify({"error": "Voice system not initialized"}), 500
         
+        # Get user ID from session (if provided)
+        session_id = data.get('sessionId', 'anonymous')
+        user_id = get_user_id_from_session(session_id)
+        
         # Synthesize speech
         try:
             from gen.text_to_voice import synthesize_speech_sync
@@ -601,15 +652,13 @@ def synthesize_speech_endpoint():
             logger.error(f"TTS synthesis error: {e}")
             return jsonify({"error": f"TTS synthesis failed: {str(e)}"}), 500
         
-        # Save AI audio to data/ai/ with timestamp (as MP3)
-        # Use absolute path to avoid issues with working directory
-        backend_dir = os.path.dirname(os.path.abspath(__file__))
-        data_ai_dir = os.path.join(backend_dir, 'data', 'ai')
-        audio_filename = f"ai_tts_{int(time.time())}.mp3"
-        audio_path = os.path.join(data_ai_dir, audio_filename)
+        # Get project name from request
+        project_name = request.json.get('projectName', 'default') if request.json else 'default'
         
-        # Ensure AI audio directory exists
-        os.makedirs(data_ai_dir, exist_ok=True)
+        # Save AI audio to project-specific directory (as MP3)
+        audio_filename = f"ai_tts_{int(time.time())}.mp3"
+        audio_path = get_user_audio_path(user_id, audio_filename, 'ai', project_name)
+        ensure_project_directories(user_id, project_name)  # Ensure project directories exist
         
         # Check if audio is already MP3 or convert it
         audio_format = tts_result.get('format', 'wav')
@@ -627,7 +676,8 @@ def synthesize_speech_endpoint():
                 logger.info(f"💾 Saved AI TTS audio (converted to MP3) to: {audio_path}")
         
         return jsonify({
-            "audioUrl": f"/data/ai/{audio_filename}",
+            "audioUrl": get_user_audio_url(user_id, audio_filename, 'ai', project_name),
+            "userId": user_id,
             "text": text,
             "voice": voice,
             "language": language,
@@ -699,7 +749,10 @@ def serve_audio(filename):
 
 @app.route('/data/<directory>/<filename>')
 def serve_data_files(directory, filename):
-    """Serve files from data directories (user audio inputs and AI audio outputs)."""
+    """
+    Serve files from legacy data directories (DEPRECATED - use user-specific endpoints).
+    Kept for backward compatibility.
+    """
     try:
         # Only allow user and ai directories for security
         if directory not in ['user', 'ai']:
@@ -717,6 +770,659 @@ def serve_data_files(directory, filename):
     except Exception as e:
         logger.error(f"Error serving data file: {e}")
         return jsonify({"error": "Failed to serve file"}), 500
+
+@app.route('/api/users/<user_id>/<project_name>/audio/<audio_type>/<filename>')
+def serve_project_audio(user_id, project_name, audio_type, filename):
+    """
+    Serve project-specific audio files.
+    
+    Args:
+        user_id: User identifier
+        project_name: Project name
+        audio_type: 'user' for user input, 'ai' for AI response
+        filename: Audio filename
+    """
+    try:
+        # Validate audio_type
+        if audio_type not in ['user', 'ai']:
+            return jsonify({"error": "Invalid audio type. Must be 'user' or 'ai'"}), 400
+        
+        # Security: Validate user_id and project_name (prevent directory traversal)
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        if '..' in project_name or '/' in project_name or '\\' in project_name:
+            return jsonify({"error": "Invalid project name"}), 400
+        
+        # Get project audio path
+        audio_path = get_user_audio_path(user_id, filename, audio_type, project_name)
+        
+        # Security: Ensure the path is within the user's directory
+        user_base = get_user_base_path(user_id)
+        if not os.path.abspath(audio_path).startswith(os.path.abspath(user_base)):
+            return jsonify({"error": "Invalid file path"}), 403
+        
+        # Check if file exists
+        if not os.path.exists(audio_path) or not os.path.isfile(audio_path):
+            logger.warning(f"Audio file not found: {audio_path}")
+            return jsonify({"error": "File not found"}), 404
+        
+        # Serve the file
+        audio_dir = os.path.dirname(audio_path)
+        return send_from_directory(audio_dir, filename)
+    except Exception as e:
+        logger.error(f"Error serving project audio file: {e}")
+        return jsonify({"error": "Failed to serve file"}), 500
+
+@app.route('/api/users/<user_id>/audio/<audio_type>/<filename>')
+def serve_user_audio(user_id, audio_type, filename):
+    """
+    Serve user-specific audio files (legacy route, without project_name).
+    Falls back to 'default' project.
+    
+    Args:
+        user_id: User identifier
+        audio_type: 'user' for user input, 'ai' for AI response
+        filename: Audio filename
+    """
+    try:
+        # Validate audio_type
+        if audio_type not in ['user', 'ai']:
+            return jsonify({"error": "Invalid audio type. Must be 'user' or 'ai'"}), 400
+        
+        # Security: Validate user_id (prevent directory traversal)
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        
+        # Try project-based path first (default project)
+        project_name = 'default'
+        audio_path = get_user_audio_path(user_id, filename, audio_type, project_name)
+        
+        # If not found in project, try legacy path (without project)
+        if not os.path.exists(audio_path) or not os.path.isfile(audio_path):
+            audio_path = get_user_audio_path(user_id, filename, audio_type, None)
+        
+        # Security: Ensure the path is within the user's directory
+        user_base = get_user_base_path(user_id)
+        if not os.path.abspath(audio_path).startswith(os.path.abspath(user_base)):
+            return jsonify({"error": "Invalid file path"}), 403
+        
+        # Check if file exists
+        if not os.path.exists(audio_path) or not os.path.isfile(audio_path):
+            return jsonify({"error": "File not found"}), 404
+        
+        # Serve the file
+        audio_dir = os.path.dirname(audio_path)
+        return send_from_directory(audio_dir, filename)
+    except Exception as e:
+        logger.error(f"Error serving user audio file: {e}")
+        return jsonify({"error": "Failed to serve file"}), 500
+
+@app.route('/api/users/<user_id>/<project_name>/media/<filename>')
+def serve_project_media(user_id, project_name, filename):
+    """
+    Serve project-specific media files (images, videos, etc.).
+    
+    Args:
+        user_id: User identifier
+        project_name: Project name
+        filename: Media filename
+    """
+    try:
+        # Security: Validate user_id and project_name (prevent directory traversal)
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        if '..' in project_name or '/' in project_name or '\\' in project_name:
+            return jsonify({"error": "Invalid project name"}), 400
+        
+        # Get project media path
+        media_path = get_user_media_path(user_id, filename, project_name)
+        
+        # Security: Ensure the path is within the user's directory
+        project_base = get_project_base_path(user_id, project_name)
+        if not os.path.abspath(media_path).startswith(os.path.abspath(project_base)):
+            return jsonify({"error": "Invalid file path"}), 403
+        
+        # Check if file exists
+        if not os.path.exists(media_path) or not os.path.isfile(media_path):
+            return jsonify({"error": "File not found"}), 404
+        
+        # Serve the file
+        media_dir = os.path.dirname(media_path)
+        return send_from_directory(media_dir, filename)
+    except Exception as e:
+        logger.error(f"Error serving project media file: {e}")
+        return jsonify({"error": "Failed to serve file"}), 500
+
+@app.route('/api/users/<user_id>/media/<filename>')
+def serve_user_media(user_id, filename):
+    """
+    Serve user-specific media files (backward compatibility - tries old structure first, then projects).
+    
+    Args:
+        user_id: User identifier
+        filename: Media filename
+    """
+    try:
+        # Security: Validate user_id (prevent directory traversal)
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        
+        # Try old structure first (for backward compatibility)
+        user_base = get_user_base_path(user_id)
+        old_media_path = os.path.join(user_base, 'media', filename)
+        
+        if os.path.exists(old_media_path) and os.path.isfile(old_media_path):
+            media_dir = os.path.dirname(old_media_path)
+            return send_from_directory(media_dir, filename)
+        
+        # Try default project
+        try:
+            media_path = get_user_media_path(user_id, filename, 'default')
+            if os.path.exists(media_path) and os.path.isfile(media_path):
+                media_dir = os.path.dirname(media_path)
+                return send_from_directory(media_dir, filename)
+        except:
+            pass
+        
+        # Try talking-orange project (common case)
+        try:
+            media_path = get_user_media_path(user_id, filename, 'talking-orange')
+            if os.path.exists(media_path) and os.path.isfile(media_path):
+                media_dir = os.path.dirname(media_path)
+                return send_from_directory(media_dir, filename)
+        except:
+            pass
+        
+        return jsonify({"error": "File not found"}), 404
+    except Exception as e:
+        logger.error(f"Error serving user media file: {e}")
+        return jsonify({"error": "Failed to serve file"}), 500
+
+@app.route('/api/users/<user_id>/<project_name>/ui')
+def serve_project_ui(user_id, project_name):
+    """
+    Serve project-specific UI HTML file.
+    This file contains project-specific HTML, CSS, and JavaScript.
+    
+    Structure: users/{user_id}/{project_name}/ui.html
+    
+    Args:
+        user_id: User identifier
+        project_name: Project name
+    """
+    try:
+        # Security: Validate user_id and project_name (prevent directory traversal)
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        if '..' in project_name or '/' in project_name or '\\' in project_name:
+            return jsonify({"error": "Invalid project name"}), 400
+        
+        # Get project base path (users/{user_id}/{project_name})
+        project_base = get_project_base_path(user_id, project_name)
+        ui_file_path = os.path.join(project_base, 'ui.html')
+        
+        # Security: Ensure the path is within the user's directory
+        user_base = get_user_base_path(user_id)
+        if not os.path.abspath(ui_file_path).startswith(os.path.abspath(user_base)):
+            return jsonify({"error": "Invalid file path"}), 403
+        
+        # Check if UI file exists
+        if not os.path.exists(ui_file_path) or not os.path.isfile(ui_file_path):
+            logger.warning(f"Project UI file not found: {ui_file_path}")
+            return jsonify({"error": "Project UI file not found"}), 404
+        
+        # Read and return the UI file content
+        with open(ui_file_path, 'r', encoding='utf-8') as f:
+            ui_content = f.read()
+        
+        # Return as HTML
+        return ui_content, 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception as e:
+        logger.error(f"Error serving project UI file: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": "Failed to serve UI file"}), 500
+
+@app.route('/api/users/<user_id>/<project_name>/media/videos/<video_dir>/<filename>')
+def serve_project_video_frame(user_id, project_name, video_dir, filename):
+    """
+    Serve video animation frames from project directories.
+    
+    Args:
+        user_id: User identifier
+        project_name: Project name
+        video_dir: Video directory name
+        filename: Frame filename
+    """
+    try:
+        # Security: Validate user_id, project_name and paths
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        if '..' in project_name or '/' in project_name or '\\' in project_name:
+            return jsonify({"error": "Invalid project name"}), 400
+        if '..' in video_dir or '..' in filename:
+            return jsonify({"error": "Invalid path"}), 400
+        
+        directories = ensure_project_directories(user_id, project_name)
+        video_path = os.path.join(directories['media'], 'videos', video_dir, filename)
+        
+        # Security: Ensure the path is within the project's directory
+        project_base = get_project_base_path(user_id, project_name)
+        if not os.path.abspath(video_path).startswith(os.path.abspath(project_base)):
+            return jsonify({"error": "Invalid file path"}), 403
+        
+        # Check if file exists
+        if not os.path.exists(video_path):
+            return jsonify({"error": "File not found"}), 404
+        
+        # Serve the file
+        video_dir_path = os.path.dirname(video_path)
+        return send_from_directory(video_dir_path, filename)
+    except Exception as e:
+        logger.error(f"Error serving project video frame: {e}")
+        return jsonify({"error": "Failed to serve file"}), 500
+
+@app.route('/api/users/<user_id>/media/videos/<video_dir>/<filename>')
+def serve_user_video_frame(user_id, video_dir, filename):
+    """
+    Serve video animation frames (backward compatibility - tries old structure first, then projects).
+    
+    Args:
+        user_id: User identifier
+        video_dir: Video directory name
+        filename: Frame filename
+    """
+    try:
+        # Security: Validate user_id and paths
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        if '..' in video_dir or '..' in filename:
+            return jsonify({"error": "Invalid path"}), 400
+        
+        # Try old structure first
+        user_base = get_user_base_path(user_id)
+        old_video_path = os.path.join(user_base, 'media', 'videos', video_dir, filename)
+        
+        if os.path.exists(old_video_path):
+            video_dir_path = os.path.dirname(old_video_path)
+            return send_from_directory(video_dir_path, filename)
+        
+        # Try default project
+        try:
+            directories = ensure_project_directories(user_id, 'default')
+            video_path = os.path.join(directories['media'], 'videos', video_dir, filename)
+            if os.path.exists(video_path):
+                video_dir_path = os.path.dirname(video_path)
+                return send_from_directory(video_dir_path, filename)
+        except:
+            pass
+        
+        # Try talking-orange project
+        try:
+            directories = ensure_project_directories(user_id, 'talking-orange')
+            video_path = os.path.join(directories['media'], 'videos', video_dir, filename)
+            if os.path.exists(video_path):
+                video_dir_path = os.path.dirname(video_path)
+                return send_from_directory(video_dir_path, filename)
+        except:
+            pass
+        
+        return jsonify({"error": "File not found"}), 404
+    except Exception as e:
+        logger.error(f"Error serving video frame: {e}")
+        return jsonify({"error": "Failed to serve file"}), 500
+
+@app.route('/api/users/<user_id>/files', methods=['GET'])
+def list_user_files(user_id):
+    """
+    List files for a user.
+    
+    Args:
+        user_id: User identifier
+    """
+    try:
+        from user_manager import list_user_files as get_files
+        
+        # Security: Validate user_id
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        
+        file_type = request.args.get('type', 'all')  # 'all', 'user', 'ai', or 'media'
+        files = get_files(user_id, file_type)
+        
+        # Format file list with metadata
+        formatted_files = {
+            'user': [],
+            'ai': [],
+            'media': []
+        }
+        
+        directories = ensure_user_directories(user_id)
+        
+        for file_type_key in ['user', 'ai', 'media']:
+            file_list = files.get(file_type_key, [])
+            for filename in file_list:
+                file_path = os.path.join(directories[f'data_{file_type_key}'] if file_type_key != 'media' else directories['media'], filename)
+                if os.path.exists(file_path):
+                    file_size = os.path.getsize(file_path)
+                    formatted_files[file_type_key].append({
+                        'filename': filename,
+                        'size': file_size,
+                        'fileType': file_type_key
+                    })
+        
+        return jsonify({
+            "userId": user_id,
+            "files": formatted_files,
+            "timestamp": time.time()
+        })
+    except Exception as e:
+        logger.error(f"Error listing user files: {e}")
+        return jsonify({"error": "Failed to list files"}), 500
+
+@app.route('/api/users/upload', methods=['POST'])
+def upload_user_file():
+    """
+    Upload a file for a user (target image or media content).
+    """
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        
+        file_type = request.form.get('fileType', 'media')  # 'target' or 'media'
+        user_id = request.form.get('userId')
+        
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        # Security: Validate user_id
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        
+        # Ensure user directories exist
+        directories = ensure_user_directories(user_id)
+        
+        # Determine save location
+        save_dir = directories['media']
+        
+        # Security: Sanitize filename
+        original_filename = os.path.basename(file.filename)
+        if '..' in original_filename or '/' in original_filename or '\\' in original_filename:
+            return jsonify({"error": "Invalid filename"}), 400
+        
+        # Handle target images - compile to .mind file
+        if file_type == 'target':
+            # Save original image first
+            image_filename = f"target_image_{int(time.time())}_{original_filename}"
+            image_path = os.path.join(save_dir, image_filename)
+            file.save(image_path)
+            
+            # Validate image for AR
+            if validate_image_for_ar:
+                is_valid, validation_msg = validate_image_for_ar(image_path)
+                if not is_valid:
+                    # Delete invalid image
+                    try:
+                        os.remove(image_path)
+                    except:
+                        pass
+                    return jsonify({
+                        "error": f"Image not suitable for AR: {validation_msg}",
+                        "validation": validation_msg
+                    }), 400
+                logger.info(f"✅ Image validation: {validation_msg}")
+            
+            # Compile to .mind file
+            mind_filename = f"target_{int(time.time())}.mind"
+            mind_path = os.path.join(save_dir, mind_filename)
+            
+            if compile_image_to_mind:
+                compiled_path = compile_image_to_mind(image_path, mind_path)
+                if compiled_path and os.path.exists(compiled_path):
+                    # Success - return .mind file info
+                    file_size = os.path.getsize(compiled_path)
+                    logger.info(f"✅ Target compiled successfully: {compiled_path} ({file_size} bytes)")
+                    
+                    return jsonify({
+                        "success": True,
+                        "filename": mind_filename,
+                        "originalImage": image_filename,
+                        "size": file_size,
+                        "fileType": "target",
+                        "url": get_user_media_url(user_id, mind_filename),
+                        "message": "Target image compiled successfully. Your AR marker is ready to use!"
+                    }), 200
+                else:
+                    # Compilation failed - keep original image, return error
+                    logger.error(f"❌ Failed to compile target image")
+                    return jsonify({
+                        "error": "Failed to compile image to AR target. Please ensure Node.js is installed.",
+                        "originalImage": image_filename,
+                        "hint": "Install Node.js: https://nodejs.org/"
+                    }), 500
+            else:
+                # Compiler not available
+                return jsonify({
+                    "error": "AR target compiler not available. Please install Node.js and mind-ar-compiler.",
+                    "originalImage": image_filename,
+                    "hint": "Install Node.js: https://nodejs.org/ then run: npm install -g mind-ar-compiler"
+                }), 500
+        else:
+            # Regular media files
+            filename = original_filename
+            file_path = os.path.join(save_dir, filename)
+            
+            # Save file
+            file.save(file_path)
+            file_size = os.path.getsize(file_path)
+            
+            logger.info(f"✅ File uploaded: {file_path} ({file_size} bytes)")
+            
+            return jsonify({
+                "success": True,
+                "filename": filename,
+                "size": file_size,
+                "fileType": file_type,
+                "url": get_user_media_url(user_id, filename)
+            }), 200
+        
+    except Exception as e:
+        logger.error(f"Error uploading file: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Upload failed: {str(e)}"}), 500
+
+@app.route('/api/targets', methods=['GET'])
+def get_all_targets():
+    """
+    Get all available AR targets from all users.
+    Returns targets with their associated media information.
+    """
+    try:
+        backend_dir = os.path.dirname(os.path.abspath(__file__))
+        users_dir = os.path.join(backend_dir, 'users')
+        
+        targets = []
+        
+        if not os.path.exists(users_dir):
+            return jsonify({"targets": []}), 200
+        
+        # Scan all user directories and their projects
+        for user_id in os.listdir(users_dir):
+            user_path = os.path.join(users_dir, user_id)
+            if not os.path.isdir(user_path):
+                continue
+            
+            # Security: Skip invalid user IDs
+            if '..' in user_id or '/' in user_id or '\\' in user_id:
+                continue
+            
+            # Scan projects within user directory
+            for project_name in os.listdir(user_path):
+                project_path = os.path.join(user_path, project_name)
+                if not os.path.isdir(project_path):
+                    continue
+                
+                # Security: Skip invalid project names
+                if '..' in project_name or '/' in project_name or '\\' in project_name:
+                    continue
+                
+                # Look for media directory in project
+                media_dir = os.path.join(project_path, 'media')
+                if not os.path.exists(media_dir):
+                    continue
+                
+                # Look for .mind files (AR targets) in project media
+                for filename in os.listdir(media_dir):
+                    if filename.endswith('.mind'):
+                        target_path = os.path.join(media_dir, filename)
+                        if os.path.isfile(target_path):
+                            # Get associated media files
+                            media_files = []
+                            for media_file in os.listdir(media_dir):
+                                if media_file != filename and os.path.isfile(os.path.join(media_dir, media_file)):
+                                    media_files.append({
+                                        'filename': media_file,
+                                        'url': get_user_media_url(user_id, media_file, project_name),
+                                        'type': _get_file_type(media_file)
+                                    })
+                            
+                            # Get video directories and their contents (frames + audio files)
+                            videos_dir = os.path.join(media_dir, 'videos')
+                            if os.path.exists(videos_dir):
+                                for video_dir in os.listdir(videos_dir):
+                                    video_path = os.path.join(videos_dir, video_dir)
+                                    if os.path.isdir(video_path):
+                                        # Add the video animation directory itself
+                                        media_files.append({
+                                            'filename': video_dir,
+                                            'url': f"/api/users/{user_id}/{project_name}/media/videos/{video_dir}/",
+                                            'type': 'video_animation'
+                                        })
+                                        
+                                        # Also include audio files from video directories
+                                        for file_in_video_dir in os.listdir(video_path):
+                                            file_path = os.path.join(video_path, file_in_video_dir)
+                                            if os.path.isfile(file_path) and file_in_video_dir.endswith(('.mp3', '.wav', '.ogg')):
+                                                media_files.append({
+                                                    'filename': file_in_video_dir,
+                                                    'url': f"/api/users/{user_id}/{project_name}/media/videos/{video_dir}/{file_in_video_dir}",
+                                                    'type': 'audio',
+                                                    'videoDir': video_dir  # Track which video directory it's in
+                                                })
+                            
+                            targets.append({
+                                'targetId': f"{user_id}_{project_name}_{filename}",
+                                'userId': user_id,
+                                'projectName': project_name,
+                                'filename': filename,
+                                'url': get_user_media_url(user_id, filename, project_name),
+                                'media': media_files
+                            })
+        
+        # Also check for default talking-orange target in frontend/media (fallback)
+        frontend_media = os.path.join(os.path.dirname(backend_dir), 'frontend', 'media')
+        default_target = os.path.join(frontend_media, 'targets.mind')
+        if os.path.exists(default_target):
+            targets.append({
+                'targetId': 'talking-orange_default',
+                'userId': 'talking-orange',
+                'filename': 'targets.mind',
+                'url': './media/targets.mind',
+                'media': _get_default_media_files(frontend_media),
+                'isDefault': True
+            })
+        
+        return jsonify({
+            "targets": targets,
+            "count": len(targets),
+            "timestamp": time.time()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting targets: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": "Failed to get targets"}), 500
+
+def _get_file_type(filename):
+    """Determine file type from extension."""
+    ext = os.path.splitext(filename)[1].lower()
+    if ext in ['.png', '.jpg', '.jpeg', '.gif']:
+        return 'image'
+    elif ext in ['.mp4', '.webm', '.mov']:
+        return 'video'
+    elif ext in ['.mp3', '.wav', '.ogg']:
+        return 'audio'
+    elif ext == '.mind':
+        return 'target'
+    else:
+        return 'other'
+
+def _get_default_media_files(media_dir):
+    """Get default media files from frontend/media."""
+    media_files = []
+    if not os.path.exists(media_dir):
+        return media_files
+    
+    for filename in os.listdir(media_dir):
+        file_path = os.path.join(media_dir, filename)
+        if os.path.isfile(file_path) and filename != 'targets.mind':
+            media_files.append({
+                'filename': filename,
+                'url': f'./media/{filename}',
+                'type': _get_file_type(filename)
+            })
+    
+    # Add videos directory
+    videos_dir = os.path.join(media_dir, 'videos')
+    if os.path.exists(videos_dir):
+        for video_dir in os.listdir(videos_dir):
+            video_path = os.path.join(videos_dir, video_dir)
+            if os.path.isdir(video_path):
+                media_files.append({
+                    'filename': video_dir,
+                    'url': f'./media/videos/{video_dir}/',
+                    'type': 'video_animation'
+                })
+    
+    return media_files
+
+@app.route('/api/users/<user_id>/media/<filename>', methods=['DELETE'])
+def delete_user_media(user_id, filename):
+    """
+    Delete a user's media file.
+    """
+    try:
+        # Security: Validate user_id and filename
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        
+        if '..' in filename or '/' in filename or '\\' in filename:
+            return jsonify({"error": "Invalid filename"}), 400
+        
+        # Get file path
+        media_path = get_user_media_path(user_id, filename)
+        
+        # Security: Ensure the path is within the user's directory
+        user_base = get_user_base_path(user_id)
+        if not os.path.abspath(media_path).startswith(os.path.abspath(user_base)):
+            return jsonify({"error": "Invalid file path"}), 403
+        
+        # Check if file exists
+        if not os.path.exists(media_path):
+            return jsonify({"error": "File not found"}), 404
+        
+        # Delete file
+        os.remove(media_path)
+        logger.info(f"✅ Deleted file: {media_path}")
+        
+        return jsonify({"success": True, "message": "File deleted"}), 200
+        
+    except Exception as e:
+        logger.error(f"Error deleting file: {e}")
+        return jsonify({"error": "Failed to delete file"}), 500
 
 @app.route('/ar-test.html')
 def ar_test():

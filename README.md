@@ -365,15 +365,20 @@ python3 check_audio_permissions.py
 
 **Common fixes:**
 ```bash
-# Fix permissions
-chmod 755 backend/data/ai
-chmod 755 backend/data/user
+# Fix permissions for user directories (new multi-user system)
+chmod 755 backend/users
 
 # Or fix ownership
-chown -R $(whoami) backend/data
+chown -R $(whoami) backend/users
 
-# Check if directories exist
-ls -la backend/data/
+# Check if user directories exist
+ls -la backend/users/
+
+# For a specific user
+ls -la backend/users/{user_id}/
+
+# Legacy data directory (deprecated - kept for backward compatibility)
+# New files use user-specific directories automatically
 ```
 
 ### Install TTS Engines (If Missing)

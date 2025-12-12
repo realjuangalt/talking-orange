@@ -67,8 +67,7 @@ def create_directories():
     directories = [
         'frontend',
         'backend/gen/prompts',
-        'backend/data/user',
-        'backend/data/ai'
+        'backend/users'  # User-specific directories will be created on-demand
     ]
     
     for directory in directories:

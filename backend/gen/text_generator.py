@@ -37,8 +37,18 @@ class TextGenerator:
     Handles all text generation tasks using the Venice AI API.
     """
     
-    def __init__(self):
-        self.prompt_loader = PromptLoader()
+    def __init__(self, user_id: str = None, project_name: str = None):
+        """
+        Initialize text generator with optional project context.
+        
+        Args:
+            user_id: User identifier for project-specific prompts
+            project_name: Project name for project-specific prompts
+        """
+        self.user_id = user_id
+        self.project_name = project_name
+        # Use project-specific prompt loader if project context provided
+        self.prompt_loader = PromptLoader(user_id=user_id, project_name=project_name)
         self.schema_loader = SchemaLoader()
     
     async def generate_text(

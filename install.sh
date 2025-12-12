@@ -152,6 +152,49 @@ fi
 
 deactivate
 
+# Install Node.js and npm (needed for AR target compilation)
+echo ""
+echo "📦 Checking Node.js (needed for AR target compilation)..."
+if command -v node &> /dev/null; then
+    NODE_VERSION=$(node --version)
+    echo "   ✅ Node.js already installed: $NODE_VERSION"
+else
+    echo "   📦 Installing Node.js (needed for compiling AR targets)..."
+    # Install Node.js 18.x LTS (stable and widely supported)
+    curl -fsSL https://deb.nodesource.com/setup_18.x | $SUDO_CMD bash -
+    if $SUDO_CMD apt install -y nodejs; then
+        NODE_VERSION=$(node --version)
+        NPM_VERSION=$(npm --version)
+        echo "   ✅ Node.js installed: $NODE_VERSION"
+        echo "   ✅ npm installed: $NPM_VERSION"
+    else
+        echo "   ⚠️  Failed to install Node.js"
+        echo "   ℹ️  AR target compilation will not work without Node.js"
+        echo "   ℹ️  You can install manually: https://nodejs.org/"
+    fi
+fi
+
+# Install mind-ar package and canvas (for AR target compilation)
+if command -v node &> /dev/null; then
+    echo "   📦 Installing mind-ar package..."
+    if npm install mind-ar --save 2>/dev/null; then
+        echo "   ✅ mind-ar package installed"
+        echo "   ✅ Same compiler as: https://hiukim.github.io/mind-ar-js-doc/tools/compile"
+    else
+        echo "   ⚠️  Failed to install mind-ar package"
+        echo "   ℹ️  Will try to install when needed"
+    fi
+    
+    echo "   📦 Installing canvas package (needed for image processing)..."
+    if npm install canvas --save 2>/dev/null; then
+        echo "   ✅ canvas package installed"
+    else
+        echo "   ⚠️  Failed to install canvas package"
+        echo "   ℹ️  Canvas is needed for image compilation. Install manually: npm install canvas"
+        echo "   ℹ️  Note: canvas requires system dependencies (libcairo2-dev, libpango1.0-dev, etc.)"
+    fi
+fi
+
 # Download AR libraries if missing
 echo ""
 echo "📦 Checking AR libraries..."
@@ -187,12 +230,11 @@ echo "   - No build process required, just serve the static HTML file"
 
 # Create necessary directories
 echo "📁 Creating project directories..."
-mkdir -p uploads
 mkdir -p frontend/media/videos/talking-orange-talking-animation
 mkdir -p frontend/media/videos/talking-orange-thinking-animation
-mkdir -p backend/data/user
-mkdir -p backend/data/ai
 mkdir -p backend/models
+mkdir -p backend/users  # User-specific directories will be created on-demand
+# Note: Legacy backend/data/ directories are deprecated but kept for backward compatibility
 
 # Set up environment file
 echo "⚙️ Setting up environment..."
@@ -206,7 +248,6 @@ fi
 # Set permissions
 echo "🔐 Setting permissions..."
 chmod +x install.sh
-chmod 755 uploads/
 
 # Verify installation
 echo "✅ Verifying installation..."

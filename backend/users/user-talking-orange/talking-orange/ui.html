@@ -1,0 +1,469 @@
+<!-- Talking Orange Project-Specific UI -->
+<!-- This file contains HTML, CSS, and JavaScript specific to the Talking Orange AR project -->
+<!-- It is loaded dynamically when the talking-orange target is detected -->
+
+<style>
+    /* Talking Orange Project-Specific Styles */
+    /* Mobile-friendly styles */
+    @media (max-width: 768px) {
+        #ask-question-btn {
+            padding: 12px 24px !important;
+            font-size: 14px !important;
+            min-width: 180px !important;
+        }
+        
+        #test-thinking-btn, #test-talking-btn, #stop-audio-btn {
+            padding: 12px 16px !important;
+            font-size: 20px !important;
+            min-width: 50px !important;
+            min-height: 50px !important;
+        }
+        
+        .language-toggle, .debug-controls {
+            padding: 6px !important;
+            font-size: 11px !important;
+        }
+        
+        .language-toggle label {
+            font-size: 11px !important;
+            margin-right: 6px !important;
+        }
+        
+        .language-toggle select {
+            padding: 3px 6px !important;
+            font-size: 11px !important;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        #ask-question-btn {
+            padding: 10px 20px !important;
+            font-size: 13px !important;
+            min-width: 160px !important;
+            bottom: 15px !important;
+        }
+        
+        #test-thinking-btn, #test-talking-btn, #stop-audio-btn {
+            padding: 10px 14px !important;
+            font-size: 18px !important;
+            min-width: 48px !important;
+            min-height: 48px !important;
+        }
+        
+        .language-toggle, .debug-controls {
+            padding: 4px !important;
+            font-size: 10px !important;
+        }
+    }
+</style>
+
+<!-- Language Toggle in Burger Menu (update existing) -->
+<script>
+    // Update language toggle in burger menu
+    (function() {
+        const langMenuBtn = document.getElementById('language-toggle-menu');
+        if (langMenuBtn) {
+            langMenuBtn.onclick = function() {
+                if (window.toggleLanguage) {
+                    window.toggleLanguage();
+                }
+            };
+        }
+    })();
+</script>
+
+<!-- Main Controls (bottom center) -->
+<div id="talking-orange-controls" style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; display: flex; gap: 10px; align-items: center;">
+    <button id="ask-question-btn" onclick="window.askQuestion()" 
+            style="background: #2196F3; color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 4px 8px rgba(0,0,0,0.3); min-width: 200px;">
+        Ask Question
+    </button>
+    
+    <!-- Stop Button (hidden by default, shown when audio is playing) -->
+    <button id="stop-audio-btn" onclick="window.stopAudio()" 
+            title="Stop Speaking"
+            style="background: rgba(244, 67, 54, 0.8); color: white; border: none; border-radius: 25px; cursor: pointer; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.3); min-width: 60px; min-height: 60px; padding: 15px 20px; display: none;">
+        ✋
+    </button>
+    
+    <!-- Test Animation Buttons -->
+    <button id="test-thinking-btn" onclick="window.testThinkingAnimation()" 
+            title="Test Thinking Animation"
+            style="background: rgba(156, 39, 176, 0.8); color: white; border: none; border-radius: 25px; cursor: pointer; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.3); min-width: 60px; min-height: 60px; padding: 15px 20px;">
+        🤔
+    </button>
+    
+    <button id="test-talking-btn" onclick="window.testTalkingAnimation()" 
+            title="Test Talking Animation"
+            style="background: rgba(255, 152, 0, 0.8); color: white; border: none; border-radius: 25px; cursor: pointer; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.3); min-width: 60px; min-height: 60px; padding: 15px 20px;">
+        🗣️
+    </button>
+</div>
+
+<script>
+    // Talking Orange Project-Specific JavaScript
+    (function() {
+        'use strict';
+        
+        // Language state (shared with main app)
+        let currentLanguage = window.currentLanguage || 'en';
+        
+        // Voice recording and processing system
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        let recordingTimer = null;
+        let recordingStartTime = null;
+        let currentAudio = null;
+        
+        // Stop audio playback and animation
+        function stopAudio() {
+            console.log('⏹️ [STOP] User requested to stop audio playback');
+            
+            // Stop current audio if playing
+            if (currentAudio) {
+                try {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                    console.log('✅ [STOP] Audio playback stopped');
+                } catch (error) {
+                    console.warn('⚠️ [STOP] Error stopping audio:', error);
+                }
+                currentAudio = null;
+            }
+            
+            // Stop talking animation
+            if (window.stopTalkingAnimation) {
+                window.stopTalkingAnimation();
+            }
+            
+            // Hide stop button
+            const stopBtn = document.getElementById('stop-audio-btn');
+            if (stopBtn) {
+                stopBtn.style.display = 'none';
+            }
+            
+            console.log('✅ [STOP] All playback stopped, ready for new question');
+        }
+        
+        // Make askQuestion available on window
+        window.askQuestion = async function askQuestion() {
+            if (isRecording) {
+                console.log('Stopping recording...');
+                stopRecording();
+                return;
+            }
+            
+            try {
+                console.log('🎤 Starting voice recording...');
+                
+                // Request microphone access
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Set up MediaRecorder
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = function(event) {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                        console.log(`📦 Collected audio chunk: ${event.data.size} bytes`);
+                    }
+                };
+                
+                mediaRecorder.onstop = async function() {
+                    const recordingDuration = recordingStartTime ? (Date.now() - recordingStartTime) : 0;
+                    console.log('🔊 [RECORDING STOPPED] Processing audio...', {
+                        duration: recordingDuration + 'ms (' + (recordingDuration / 1000).toFixed(2) + 's)',
+                        chunks: audioChunks.length,
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                    // Check if we actually recorded any audio
+                    if (audioChunks.length === 0 || audioChunks.every(chunk => chunk.size === 0)) {
+                        console.error('❌ [RECORDING ERROR] No audio data recorded - microphone may be off or not working');
+                        if (window.stopThinkingAnimation) window.stopThinkingAnimation();
+                        alert('⚠️ No audio recorded. Please check your microphone and try again.');
+                        return;
+                    }
+                    
+                    const blobStartTime = performance.now();
+                    // Create audio blob
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const blobDuration = (performance.now() - blobStartTime).toFixed(0);
+                    console.log(`📊 [AUDIO BLOB] Created in ${blobDuration}ms`, {
+                        size: audioBlob.size + ' bytes',
+                        sizeKB: (audioBlob.size / 1024).toFixed(2) + ' KB',
+                        chunks: audioChunks.length
+                    });
+                    
+                    // Validate audio blob size
+                    if (audioBlob.size < 100) {
+                        console.error('❌ [RECORDING ERROR] Audio blob too small - microphone may not be working');
+                        if (window.stopThinkingAnimation) window.stopThinkingAnimation();
+                        alert('⚠️ Audio recording is too short or empty. Please check your microphone and try again.');
+                        return;
+                    }
+                    
+                    // Convert to base64
+                    const base64StartTime = performance.now();
+                    const reader = new FileReader();
+                    reader.onloadend = async function() {
+                        const base64Duration = (performance.now() - base64StartTime).toFixed(0);
+                        const base64Audio = reader.result.split(',')[1]; // Remove data:audio/webm;base64, prefix
+                        console.log(`📤 [BASE64 CONVERSION] Completed in ${base64Duration}ms`, {
+                            base64Length: base64Audio.length + ' characters',
+                            estimatedSize: (base64Audio.length * 3 / 4).toFixed(0) + ' bytes',
+                            timestamp: new Date().toISOString()
+                        });
+                        
+                        // Send to backend for processing
+                        await processVoiceInput(base64Audio);
+                    };
+                    reader.onerror = function(error) {
+                        console.error('❌ [BASE64 ERROR] FileReader error:', error);
+                    };
+                    reader.readAsDataURL(audioBlob);
+                    
+                    // Stop all tracks
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                // Start recording with timeslice to ensure we capture all data
+                mediaRecorder.start(1000); // Request data every 1 second
+                isRecording = true;
+                recordingStartTime = Date.now();
+                
+                // Show recording indicator
+                const button = document.getElementById('ask-question-btn');
+                button.textContent = currentLanguage === 'es' ? 'Detener Grabación (0s)' : 'Stop Recording (0s)';
+                button.style.background = '#f44336';
+                
+                // Update timer every second
+                recordingTimer = setInterval(() => {
+                    if (isRecording) {
+                        const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+                        button.textContent = currentLanguage === 'es' ? `Detener Grabación (${elapsed}s)` : `Stop Recording (${elapsed}s)`;
+                        
+                        // Auto-stop after 1 minute (60 seconds)
+                        if (elapsed >= 60) {
+                            console.log('⏰ Auto-stopping recording after 1 minute');
+                            stopRecording();
+                        }
+                    }
+                }, 1000);
+                
+                // Start thinking animation
+                if (window.startThinkingAnimation) {
+                    window.startThinkingAnimation();
+                }
+                
+            } catch (error) {
+                console.error('❌ Error accessing microphone:', error);
+                if (window.stopThinkingAnimation) window.stopThinkingAnimation();
+                alert('⚠️ Microphone access denied or not available. Please grant permissions and try again.');
+            }
+        };
+        
+        function stopRecording() {
+            if (!isRecording) return;
+            
+            isRecording = false;
+            if (recordingTimer) {
+                clearInterval(recordingTimer);
+                recordingTimer = null;
+            }
+            
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            
+            // Reset button
+            const button = document.getElementById('ask-question-btn');
+            if (button) {
+                button.textContent = currentLanguage === 'es' ? 'Hacer Pregunta' : 'Ask Question';
+                button.style.background = '#2196F3';
+            }
+            
+            // Stop thinking animation
+            if (window.stopThinkingAnimation) {
+                window.stopThinkingAnimation();
+            }
+        }
+        
+        async function processVoiceInput(base64Audio) {
+            try {
+                console.log('📤 Sending audio to backend for processing...');
+                
+                // Get current target for project context
+                const target = window.currentTarget || {};
+                const userId = target.userId || 'default';
+                const projectName = target.projectName || 'default';
+                
+                const response = await fetch('/api/speech/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        audio: base64Audio,
+                        language: currentLanguage,
+                        userId: userId,
+                        projectName: projectName
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                console.log('✅ Received response from backend:', result);
+                
+                // Stop thinking animation
+                if (window.stopThinkingAnimation) {
+                    window.stopThinkingAnimation();
+                }
+                
+                // Play AI response audio
+                if (result.audio_url) {
+                    playResponseAudio(result.audio_url);
+                } else {
+                    console.warn('⚠️ No audio URL in response');
+                }
+                
+            } catch (error) {
+                console.error('❌ Error processing voice input:', error);
+                if (window.stopThinkingAnimation) window.stopThinkingAnimation();
+                alert('⚠️ Error processing your question. Please try again.');
+            }
+        }
+        
+        function playResponseAudio(audioUrl) {
+            console.log('🔊 Playing response audio:', audioUrl);
+            
+            // Stop any existing audio
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+            
+            // Create new audio element
+            currentAudio = new Audio(audioUrl);
+            currentAudio.volume = 1.0;
+            
+            // Show stop button
+            const stopBtn = document.getElementById('stop-audio-btn');
+            if (stopBtn) {
+                stopBtn.style.display = 'block';
+            }
+            
+            // Start talking animation
+            if (window.startTalkingAnimation) {
+                window.startTalkingAnimation();
+            }
+            
+            currentAudio.onended = function() {
+                console.log('✅ Audio playback finished');
+                if (window.stopTalkingAnimation) {
+                    window.stopTalkingAnimation();
+                }
+                if (stopBtn) {
+                    stopBtn.style.display = 'none';
+                }
+                currentAudio = null;
+            };
+            
+            currentAudio.onerror = function(error) {
+                console.error('❌ Audio playback error:', error);
+                if (window.stopTalkingAnimation) {
+                    window.stopTalkingAnimation();
+                }
+                if (stopBtn) {
+                    stopBtn.style.display = 'none';
+                }
+                currentAudio = null;
+            };
+            
+            currentAudio.play().catch(error => {
+                console.error('❌ Error playing audio:', error);
+                if (window.stopTalkingAnimation) {
+                    window.stopTalkingAnimation();
+                }
+                if (stopBtn) {
+                    stopBtn.style.display = 'none';
+                }
+                currentAudio = null;
+            });
+        }
+        
+        // Language toggle function
+        function toggleLanguage() {
+            currentLanguage = currentLanguage === 'en' ? 'es' : 'en';
+            window.currentLanguage = currentLanguage; // Update global
+            
+            const button = document.getElementById('language-toggle');
+            if (button) button.textContent = currentLanguage.toUpperCase();
+            const langDisplay = document.getElementById('lang-display');
+            if (langDisplay) langDisplay.textContent = currentLanguage.toUpperCase();
+            
+            updateButtonText();
+            if (window.updateTalkingControllerLanguage) {
+                window.updateTalkingControllerLanguage(currentLanguage);
+            }
+        }
+        
+        function updateButtonText() {
+            const button = document.getElementById('ask-question-btn');
+            if (!button) return;
+            
+            if (currentLanguage === 'es') {
+                button.textContent = 'Hacer Pregunta';
+            } else {
+                button.textContent = 'Ask Question';
+            }
+        }
+        
+        // Initialize button text
+        updateButtonText();
+        
+        // Expose functions globally
+        window.stopAudio = stopAudio;
+        window.toggleLanguage = toggleLanguage;
+        window.currentLanguage = currentLanguage;
+        
+        // Test animation functions
+        window.testThinkingAnimation = function() {
+            console.log('🧪 Testing thinking animation (one cycle)...');
+            if (!window.thinkingController) {
+                console.error('❌ Thinking controller not initialized.');
+                return;
+            }
+            if (window.stopTalkingAnimation) window.stopTalkingAnimation();
+            if (window.stopThinkingAnimation) window.stopThinkingAnimation();
+            setTimeout(() => {
+                if (window.thinkingController) {
+                    window.thinkingController.start({ loop: false, playAudio: true });
+                }
+            }, 100);
+        };
+        
+        window.testTalkingAnimation = function() {
+            console.log('🧪 Testing talking animation (one cycle with intro)...');
+            if (!window.talkingController) {
+                console.error('❌ Talking controller not initialized.');
+                return;
+            }
+            if (window.stopTalkingAnimation) window.stopTalkingAnimation();
+            if (window.stopThinkingAnimation) window.stopThinkingAnimation();
+            setTimeout(() => {
+                if (window.talkingController) {
+                    window.talkingController.start({ loop: false, playIntro: true });
+                }
+            }, 100);
+        };
+        
+        console.log('✅ Talking Orange project UI loaded');
+    })();
+</script>
+

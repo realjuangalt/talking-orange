@@ -36,3 +36,10 @@ numpy>=1.21.0
 
 # Schema validation
 jsonschema>=4.0.0
+
+# Image processing (for AR target validation)
+Pillow>=9.0.0
+
+# Note: MindAR compiler uses Node.js with 'mind-ar' npm package
+# Install with: npm install mind-ar
+# Same compiler as: https://hiukim.github.io/mind-ar-js-doc/tools/compile

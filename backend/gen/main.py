@@ -34,18 +34,21 @@ load_dotenv()
 
 class TalkingOrangeVoiceSystem:
     """
-    Main voice processing system for Talking Orange AR project.
-    Coordinates STT, TTS, and Bitcoin evangelism responses.
+    Main voice processing system for AR projects.
+    Coordinates STT, TTS, and AI responses with project-specific prompts.
     """
     
-    def __init__(self, model_dir: str = None, voice_dir: str = None):
+    def __init__(self, model_dir: str = None, voice_dir: str = None, user_id: str = None, project_name: str = None):
         self.model_dir = model_dir or os.getenv('MODEL_DIR', str(Path(__file__).parent.parent / 'models'))
         self.voice_dir = voice_dir or os.getenv('VOICE_DIR', './voices')
+        self.user_id = user_id
+        self.project_name = project_name
         
         # Initialize services
         self.stt_service = VoiceToTextService(model_dir=self.model_dir)
         self.tts_service = TextToVoiceService(voice_dir=self.voice_dir)
-        self.text_generator = TextGenerator()
+        # Pass project context to text generator for project-specific prompts
+        self.text_generator = TextGenerator(user_id=user_id, project_name=project_name)
         
         self.initialized = False
         
@@ -90,7 +93,9 @@ class TalkingOrangeVoiceSystem:
     def process_voice_input_sync(self, audio_input: Union[str, bytes], 
                                 language: str = "en", 
                                 tts_voice: str = "default",
-                                tts_engine: str = "auto") -> Dict[str, Any]:
+                                tts_engine: str = "auto",
+                                user_id: str = None,
+                                project_name: str = None) -> Dict[str, Any]:
         """
         Synchronous version of process_voice_input for Flask compatibility.
         """
@@ -115,8 +120,15 @@ class TalkingOrangeVoiceSystem:
             
             logger.info(f"📝 [VOICE SYSTEM] Transcribed text: '{user_text}'")
             
-            # Generate Bitcoin response
-            logger.info(f"🤖 [VOICE SYSTEM] Generating Bitcoin response...")
+            # Update project context if provided
+            if user_id and project_name:
+                self.user_id = user_id
+                self.project_name = project_name
+                # Reinitialize text generator with project context
+                self.text_generator = TextGenerator(user_id=user_id, project_name=project_name)
+            
+            # Generate AI response with project-specific prompts
+            logger.info(f"🤖 [VOICE SYSTEM] Generating AI response (project: {project_name or 'default'})...")
             response_start = time.time()
             response_text = self._generate_bitcoin_response_sync(user_text, language)
             response_duration = round(time.time() - response_start, 2)
@@ -172,47 +184,42 @@ class TalkingOrangeVoiceSystem:
                 "tts_voice": "error"
             }
     
-    def _generate_bitcoin_response_sync(self, user_input: str, language: str = "en") -> str:
-        """Synchronous Bitcoin response generation using real LLM."""
+    def _generate_bitcoin_response_sync(self, user_input: str, language: str = "en", user_id: str = None, project_name: str = None) -> str:
+        """Synchronous AI response generation using real LLM with project-specific prompts."""
+        # Use provided project context or fall back to instance context
+        effective_user_id = user_id or self.user_id
+        effective_project_name = project_name or self.project_name
+        
+        # Temporarily update context if provided
+        original_user_id = self.user_id
+        original_project_name = self.project_name
+        context_changed = False
+        if user_id and project_name:
+            self.user_id = user_id
+            self.project_name = project_name
+            # Reinitialize text generator with project context
+            self.text_generator = TextGenerator(user_id=user_id, project_name=project_name)
+            context_changed = True
+        
         try:
-            # Use the text generator for real LLM response
-            try:
-                from .text_generator import TextGenerator
-            except ImportError:
-                from text_generator import TextGenerator
-            
-            # Load Bitcoin evangelism prompt from file (language-specific)
-            prompt_filename = f"bitcoin_evangelism_{language}.txt" if language != 'en' else "bitcoin_evangelism.txt"
-            prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', prompt_filename)
-            
-            # Fallback to English if language-specific prompt doesn't exist
-            if not os.path.exists(prompt_path) and language != 'en':
-                logger.warning(f"Language-specific prompt not found at {prompt_path}, falling back to English")
-                prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', 'bitcoin_evangelism.txt')
-            
-            if os.path.exists(prompt_path):
-                with open(prompt_path, 'r', encoding='utf-8') as f:
-                    system_prompt = f.read().strip()
-            else:
-                logger.error(f"Prompt file not found at {prompt_path}")
-                system_prompt = "You are a friendly Bitcoin educator."
+            # Load project-specific prompt (language-specific)
+            # Try project-specific prompt first, then fall back to default
+            system_prompt = self._load_project_prompt(language)
             
             # Create full prompt
-            bitcoin_prompt = f"{system_prompt}\n\nThe user said: {user_input}"
+            full_prompt = f"{system_prompt}\n\nThe user said: {user_input}"
 
             # Log conversation to file
-            self._log_conversation(user_input, bitcoin_prompt)
+            self._log_conversation(user_input, full_prompt)
 
-            # Generate response using Venice AI
-            text_generator = TextGenerator()
-            
+            # Generate response using Venice AI (text_generator already has project context)
             # Run the async function synchronously
             import asyncio
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
                 response = loop.run_until_complete(
-                    text_generator.generate_text(bitcoin_prompt)
+                    self.text_generator.generate_text(full_prompt)
                 )
                 if response and response.strip():
                     response_text = response.strip()
@@ -233,6 +240,74 @@ class TalkingOrangeVoiceSystem:
             # Log the fallback response
             self._log_ai_response(fallback_response)
             return fallback_response
+        finally:
+            # Restore original context if we temporarily changed it
+            if context_changed:
+                self.user_id = original_user_id
+                self.project_name = original_project_name
+                if original_user_id and original_project_name:
+                    self.text_generator = TextGenerator(user_id=original_user_id, project_name=original_project_name)
+                else:
+                    self.text_generator = TextGenerator()
+    
+    def _load_project_prompt(self, language: str = "en", prompt_name: str = "bitcoin_evangelism") -> str:
+        """
+        Load project-specific prompt file, with fallbacks.
+        
+        Args:
+            language: Language code (e.g., 'en', 'es')
+            prompt_name: Base name of the prompt file (default: 'bitcoin_evangelism' for backward compatibility)
+            
+        Returns:
+            System prompt string
+        """
+        # Try to load from project-specific prompts folder
+        if self.user_id and self.project_name:
+            try:
+                from user_manager import get_project_prompts_path
+                prompts_dir = get_project_prompts_path(self.user_id, self.project_name)
+                
+                # Try language-specific prompt first (e.g., "bitcoin_evangelism_es.txt")
+                prompt_filename = f"{prompt_name}_{language}.txt" if language != 'en' else f"{prompt_name}.txt"
+                prompt_path = os.path.join(prompts_dir, prompt_filename)
+                
+                # Fallback to English if language-specific doesn't exist
+                if not os.path.exists(prompt_path) and language != 'en':
+                    prompt_path = os.path.join(prompts_dir, f"{prompt_name}.txt")
+                
+                # Also try generic "system_prompt" or "main_prompt" as fallback
+                if not os.path.exists(prompt_path):
+                    for generic_name in ["system_prompt", "main_prompt"]:
+                        generic_path = os.path.join(prompts_dir, f"{generic_name}_{language}.txt" if language != 'en' else f"{generic_name}.txt")
+                        if os.path.exists(generic_path):
+                            prompt_path = generic_path
+                            break
+                        if language != 'en':
+                            generic_path_en = os.path.join(prompts_dir, f"{generic_name}.txt")
+                            if os.path.exists(generic_path_en):
+                                prompt_path = generic_path_en
+                                break
+                
+                if os.path.exists(prompt_path):
+                    with open(prompt_path, 'r', encoding='utf-8') as f:
+                        return f.read().strip()
+            except Exception as e:
+                logger.warning(f"Could not load project-specific prompt: {e}")
+        
+        # Fallback to default gen/prompts directory (for backward compatibility)
+        prompt_filename = f"{prompt_name}_{language}.txt" if language != 'en' else f"{prompt_name}.txt"
+        prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', prompt_filename)
+        
+        if not os.path.exists(prompt_path) and language != 'en':
+            prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', f'{prompt_name}.txt')
+        
+        if os.path.exists(prompt_path):
+            with open(prompt_path, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+        
+        # Final fallback
+        logger.error(f"Prompt file not found, using default")
+        return "You are a friendly AI assistant."
     
     async def process_voice_input(self, audio_input: Union[str, bytes], 
                                  language: str = "en", 
@@ -321,37 +396,12 @@ class TalkingOrangeVoiceSystem:
     
     async def _generate_bitcoin_response(self, user_input: str, language: str = "en") -> str:
         """
-        Generate Bitcoin evangelism response using real LLM API.
-        Uses Venice AI API with Bitcoin evangelism prompt.
+        Generate AI response using real LLM API with project-specific prompts.
+        Uses Venice AI API with project-specific prompt.
         """
         try:
-            # Load Bitcoin evangelism prompt (language-specific)
-            prompt_filename = f"bitcoin_evangelism_{language}.txt" if language != 'en' else "bitcoin_evangelism.txt"
-            prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', prompt_filename)
-            
-            # Fallback to English if language-specific prompt doesn't exist
-            if not os.path.exists(prompt_path) and language != 'en':
-                logger.warning(f"Language-specific prompt not found at {prompt_path}, falling back to English")
-                prompt_path = os.path.join(os.path.dirname(__file__), 'prompts', 'bitcoin_evangelism.txt')
-            
-            system_prompt = ""
-            
-            if os.path.exists(prompt_path):
-                with open(prompt_path, 'r', encoding='utf-8') as f:
-                    system_prompt = f.read().strip()
-            else:
-                system_prompt = """You are the Talking Orange, a friendly and enthusiastic Bitcoin evangelist. Your mission is to educate people about Bitcoin in an engaging, accessible way.
-
-PERSONALITY:
-- Enthusiastic and optimistic about Bitcoin
-- Patient and educational
-- Use simple, clear language
-- Be encouraging and supportive
-- Occasionally use orange-themed expressions
-- Keep responses under 100 words
-- End with a question to keep conversation going
-
-You have access to web search capabilities, so you can provide up-to-date information about Bitcoin when needed."""
+            # Load project-specific prompt
+            system_prompt = self._load_project_prompt(language)
             
             # Create full prompt for logging
             full_prompt = f"System: {system_prompt}\n\nUser: {user_input}"
@@ -359,7 +409,7 @@ You have access to web search capabilities, so you can provide up-to-date inform
             # Log conversation to file
             self._log_conversation(user_input, full_prompt)
             
-            # Use the text generator for real LLM response
+            # Use the text generator for real LLM response (already has project context)
             response = await self.text_generator.generate_text(
                 prompt=full_prompt,
                 model="llama-3.3-70b",
@@ -378,9 +428,9 @@ You have access to web search capabilities, so you can provide up-to-date inform
                 raise Exception("No response from LLM")
                 
         except Exception as e:
-            logger.error(f"Bitcoin response generation failed: {e}")
-            # Fallback to simple Bitcoin response
-            return f"Bitcoin is amazing! It's digital money that gives you financial freedom! 🍊 What would you like to know about Bitcoin?"
+            logger.error(f"AI response generation failed: {e}")
+            # Fallback response
+            return "I'm having trouble processing that right now. Could you try asking again?"
     
     def _log_conversation(self, user_input: str, full_prompt: str):
         """Log conversation details to talk.log file."""

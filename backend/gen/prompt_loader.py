@@ -11,18 +11,40 @@ from pathlib import Path
 class PromptLoader:
     """Loads and manages prompt templates from the prompts directory."""
     
-    def __init__(self, prompts_dir: str = None):
+    def __init__(self, prompts_dir: str = None, user_id: str = None, project_name: str = None):
         """
         Initialize the prompt loader.
         
         Args:
-            prompts_dir: Path to the prompts directory
+            prompts_dir: Path to the prompts directory (if None, will use project-specific or default)
+            user_id: User identifier for project-specific prompts
+            project_name: Project name for project-specific prompts
         """
         if prompts_dir is None:
-            # Default to gen/prompts directory
-            prompts_dir = os.path.join(os.path.dirname(__file__), "prompts")
+            # Try to use project-specific prompts if user_id and project_name provided
+            if user_id and project_name:
+                try:
+                    # Import here to avoid circular dependencies
+                    import sys
+                    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    if backend_dir not in sys.path:
+                        sys.path.insert(0, backend_dir)
+                    from user_manager import get_project_prompts_path
+                    prompts_dir = get_project_prompts_path(user_id, project_name)
+                    # If project prompts don't exist, fall back to default
+                    if not os.path.exists(prompts_dir):
+                        prompts_dir = os.path.join(os.path.dirname(__file__), "prompts")
+                except Exception as e:
+                    # Fallback to default if project prompts unavailable
+                    prompts_dir = os.path.join(os.path.dirname(__file__), "prompts")
+            else:
+                # Default to gen/prompts directory
+                prompts_dir = os.path.join(os.path.dirname(__file__), "prompts")
+        
         self.prompts_dir = Path(prompts_dir)
         self._cache = {}
+        self.user_id = user_id
+        self.project_name = project_name
         
         if not self.prompts_dir.exists():
             raise FileNotFoundError(f"Prompts directory not found: {self.prompts_dir}")
@@ -151,12 +173,27 @@ class PromptLoader:
 # Global instance for easy access - lazy loaded
 _prompt_loader = None
 
-def get_prompt_loader():
+def get_prompt_loader(user_id: str = None, project_name: str = None):
+    """
+    Get a prompt loader instance, optionally project-specific.
+    
+    Args:
+        user_id: User identifier for project-specific prompts
+        project_name: Project name for project-specific prompts
+        
+    Returns:
+        PromptLoader instance
+    """
     global _prompt_loader
+    # If project-specific, create new instance (don't cache globally)
+    if user_id and project_name:
+        return PromptLoader(user_id=user_id, project_name=project_name)
+    # Otherwise use cached global instance
     if _prompt_loader is None:
         _prompt_loader = PromptLoader()
     return _prompt_loader
 
+# Default global instance (for backward compatibility)
 prompt_loader = get_prompt_loader()
 
 # Convenience functions

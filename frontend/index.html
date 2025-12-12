@@ -7,57 +7,24 @@
     <script src="./lib/aframe.min.js"></script>
     <script src="./lib/mindar-image-aframe.prod.js"></script>
     <style>
-        /* Mobile-friendly styles */
-        @media (max-width: 768px) {
-            #ask-question-btn {
-                padding: 12px 24px !important;
-                font-size: 14px !important;
-                min-width: 180px !important;
-            }
-            
-            #test-thinking-btn, #test-talking-btn, #stop-audio-btn {
-                padding: 12px 16px !important;
-                font-size: 20px !important;
-                min-width: 50px !important;
-                min-height: 50px !important;
-            }
-            
-            .language-toggle, .debug-controls {
-                padding: 6px !important;
-                font-size: 11px !important;
-            }
-            
-            .language-toggle label {
-                font-size: 11px !important;
-                margin-right: 6px !important;
-            }
-            
-            .language-toggle select {
-                padding: 3px 6px !important;
-                font-size: 11px !important;
-            }
+        /* Ensure body doesn't cover the video */
+        body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            overflow: hidden !important;
+            background: transparent !important;
         }
         
-        @media (max-width: 480px) {
-            #ask-question-btn {
-                padding: 10px 20px !important;
-                font-size: 13px !important;
-                min-width: 160px !important;
-                bottom: 15px !important;
-            }
-            
-            #test-thinking-btn, #test-talking-btn, #stop-audio-btn {
-                padding: 10px 14px !important;
-                font-size: 18px !important;
-                min-width: 48px !important;
-                min-height: 48px !important;
-            }
-            
-            .language-toggle, .debug-controls {
-                padding: 4px !important;
-                font-size: 10px !important;
-            }
+        html {
+            width: 100% !important;
+            height: 100% !important;
+            overflow: hidden !important;
+            background: transparent !important;
         }
+        
+        /* Project-specific styles will be loaded from project UI files */
         
         /* Prevent zoom on double tap */
         * {
@@ -69,70 +36,112 @@
             min-height: 44px;
             min-width: 44px;
         }
+        
+        /* Hide MindAR scanning UI overlay */
+        .mindar-ui-scanning,
+        .mindar-ui-overlay.mindar-ui-scanning,
+        .scanning,
+        .scanline {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+        }
+        
+        /* Make camera view full width */
+        a-scene {
+            width: 100% !important;
+            height: 100% !important;
+            position: relative !important;
+            z-index: 1 !important;
+            background: transparent !important;
+        }
+        
+        /* Ensure video element (camera feed) is full width and visible */
+        a-scene video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            z-index: 0 !important;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            background: #000 !important;
+        }
+        
+        /* Ensure canvas is visible and on top of video */
+        a-scene canvas {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            z-index: 1 !important;
+            display: block !important;
+            visibility: visible !important;
+            background: transparent !important;
+        }
+        
+        /* Also target .a-canvas class */
+        .a-canvas {
+            width: 100% !important;
+            height: 100% !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            z-index: 1 !important;
+            display: block !important;
+            visibility: visible !important;
+        }
     </style>
 </head>
 <body>
-    <a-scene mindar-image="imageTargetSrc: ./media/targets.mind; maxTrack: 1; missTolerance: 80; warmupTolerance: 8; filterMinCF: 0.00001; filterBeta: 10000; uiLoading: yes; uiScanning: yes; uiError: yes;" vr-mode-ui="enabled: false" xr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="antialias: true; physicallyCorrectLights: false">
+    <a-scene id="ar-scene" vr-mode-ui="enabled: false" xr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="antialias: true; physicallyCorrectLights: false">
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-        <a-assets>
-            <!-- Images for idle state -->
-            <img id="talking-orange" src="./media/talking-orange-smile.png" />
-            <img id="talking-orange-wink" src="./media/talking-orange-wink.png" />
-            
-            <!-- Images for thinking state -->
-            <img id="talking-orange-thinking-1" src="./media/talking-orange-thinking-1.png" />
-            <img id="talking-orange-thinking-2" src="./media/talking-orange-thinking-2.png" />
-            
-            <!-- Images for talking animation (mouth opening/closing) -->
-            <img id="talking-orange-talking-1" src="./media/talking-orange-talking-1.png" />
-            <img id="talking-orange-talking-2" src="./media/talking-orange-talking-2.png" />
-            <img id="talking-orange-talking-3" src="./media/talking-orange-talking-3.png" />
-            <img id="talking-orange-talking-4" src="./media/talking-orange-talking-4.png" />
+        <a-assets id="ar-assets">
+            <!-- Media will be loaded dynamically -->
         </a-assets>
         
-        <a-entity mindar-image-target="targetIndex: 0">
+        <a-entity id="ar-marker" mindar-image-target="targetIndex: 0">
             <!-- Image plane for all states (idle, thinking, talking) -->
-            <a-plane id="talking-orange-plane" src="#talking-orange" position="0 0 0.01" height="1" width="1" rotation="9 0 0" 
+            <a-plane id="talking-orange-plane" position="0 0 0.01" height="1" width="1" rotation="9 0 0" 
                      material="shader: flat; transparent: true; alphaTest: 0.1; opacity: 1"
                      visible="true"></a-plane>
         </a-entity>
     </a-scene>
     
-    <!-- Language Toggle -->
-    <div style="position: fixed; top: 15px; right: 15px; z-index: 1000;">
+    <!-- Burger Menu -->
+    <div style="position: fixed; top: 15px; right: 15px; z-index: 1001;">
+        <button id="burger-menu-btn" onclick="toggleBurgerMenu()" 
+                style="background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 10px; border-radius: 8px; cursor: pointer; font-size: 20px; backdrop-filter: blur(5px); width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
+            ☰
+        </button>
+        
+        <!-- Burger Menu Dropdown -->
+        <div id="burger-menu" style="position: absolute; top: 54px; right: 0; background: rgba(0,0,0,0.9); border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 10px; min-width: 180px; display: none; backdrop-filter: blur(10px); box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+            <button onclick="window.location.href='user.html'" 
+                    style="width: 100%; background: #2196F3; color: white; border: none; padding: 12px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; margin-bottom: 8px; text-align: left;">
+                🔐 Login / User Home
+            </button>
+            <button id="language-toggle-menu" onclick="if(window.toggleLanguage) window.toggleLanguage()" 
+                    style="width: 100%; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 12px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; text-align: left;">
+                🌍 Language: <span id="lang-display">EN</span>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Language Toggle (Legacy - hidden, kept for compatibility) -->
+    <div style="position: fixed; top: 15px; right: 70px; z-index: 1000; display: none;">
         <button id="language-toggle" onclick="toggleLanguage()" 
                 style="background: rgba(0,0,0,0.3); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 6px 12px; border-radius: 15px; cursor: pointer; font-size: 12px; font-weight: bold; backdrop-filter: blur(5px);">
             EN
         </button>
     </div>
     
-    <!-- Main Controls (bottom center) -->
-    <div style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; display: flex; gap: 10px; align-items: center;">
-        <button id="ask-question-btn" onclick="window.askQuestion()" 
-                style="background: #2196F3; color: white; border: none; padding: 15px 30px; border-radius: 25px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 4px 8px rgba(0,0,0,0.3); min-width: 200px;">
-            Ask Question
-        </button>
-        
-        <!-- Stop Button (hidden by default, shown when audio is playing) -->
-        <button id="stop-audio-btn" onclick="window.stopAudio()" 
-                title="Stop Speaking"
-                style="background: rgba(244, 67, 54, 0.8); color: white; border: none; border-radius: 25px; cursor: pointer; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.3); min-width: 60px; min-height: 60px; padding: 15px 20px; display: none;">
-            ✋
-        </button>
-        
-        <!-- Test Animation Buttons -->
-        <button id="test-thinking-btn" onclick="window.testThinkingAnimation()" 
-                title="Test Thinking Animation"
-                style="background: rgba(156, 39, 176, 0.8); color: white; border: none; border-radius: 25px; cursor: pointer; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.3); min-width: 60px; min-height: 60px; padding: 15px 20px;">
-            🤔
-        </button>
-        
-        <button id="test-talking-btn" onclick="window.testTalkingAnimation()" 
-                title="Test Talking Animation"
-                style="background: rgba(255, 152, 0, 0.8); color: white; border: none; border-radius: 25px; cursor: pointer; font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.3); min-width: 60px; min-height: 60px; padding: 15px 20px;">
-            🗣️
-        </button>
-    </div>
+    <!-- Project-Specific UI Container -->
+    <!-- This will be populated dynamically when a target is detected -->
+    <!-- Hidden by default, shown only when target is detected -->
+    <div id="project-ui-container" style="display: none;"></div>
     
     <script>
         // IMMEDIATE TEST - This should appear first in console
@@ -165,16 +174,123 @@
             console.log(`⏱️ [TIMER] App running: ${minutes}m ${seconds}s (${elapsed}s total)`);
         }, 10000); // Every 10 seconds
         
+        // Global variables for AR system
+        let availableTargets = [];
+        let currentTarget = null;
+        let currentTargetMedia = null;
+        
+        // Function to load project-specific UI
+        async function loadProjectUI(userId, projectName) {
+            try {
+                console.log(`📦 Loading project UI for ${userId}/${projectName}...`);
+                const uiUrl = `/api/users/${userId}/${projectName}/ui`;
+                const response = await fetch(uiUrl);
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        console.log(`ℹ️ No project UI file found for ${userId}/${projectName} (this is optional)`);
+                        return;
+                    }
+                    throw new Error(`Failed to load project UI: ${response.status}`);
+                }
+                
+                const uiHtml = await response.text();
+                const container = document.getElementById('project-ui-container');
+                if (container) {
+                    container.innerHTML = uiHtml;
+                    container.style.display = 'block'; // Make sure it's visible
+                    console.log(`✅ Project UI loaded for ${userId}/${projectName}`);
+                    
+                    // Update button text after UI loads (if function exists)
+                    if (typeof updateButtonText === 'function') {
+                        setTimeout(() => updateButtonText(), 100); // Small delay to ensure DOM is ready
+                    }
+                } else {
+                    console.error('❌ Project UI container not found');
+                }
+            } catch (error) {
+                console.warn(`⚠️ Error loading project UI: ${error.message}`);
+            }
+        }
+        
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚨 TEST LOG - DOMContentLoaded fired!');
             const scene = document.querySelector('a-scene');
             console.log('🚨 TEST LOG - Scene element:', scene);
-            const marker = document.querySelector('[mindar-image-target]');
+            
+            // Load available targets from API
+            loadAvailableTargets().then(() => {
+                initializeARSystem();
+            });
+        });
+        
+        async function loadAvailableTargets() {
+            try {
+                console.log('📡 Loading available AR targets...');
+                const response = await fetch('/api/targets');
+                const data = await response.json();
+                
+                if (response.ok && data.targets) {
+                    availableTargets = data.targets;
+                    console.log(`✅ Loaded ${availableTargets.length} AR target(s):`, availableTargets.map(t => t.targetId));
+                    
+                    // Select first target (or default talking-orange if available)
+                    const defaultTarget = availableTargets.find(t => t.userId === 'talking-orange' || t.isDefault) || availableTargets[0];
+                    if (defaultTarget) {
+                        currentTarget = defaultTarget;
+                        currentTargetMedia = defaultTarget.media || [];
+                        console.log(`🎯 Selected target: ${currentTarget.targetId} (${currentTarget.userId})`);
+                    }
+                } else {
+                    console.warn('⚠️ No targets found, using fallback');
+                    // Fallback to default
+                    currentTarget = {
+                        targetId: 'talking-orange_default',
+                        userId: 'talking-orange',
+                        filename: 'targets.mind',
+                        url: './media/targets.mind',
+                        media: [],
+                        isDefault: true
+                    };
+                }
+            } catch (error) {
+                console.error('❌ Error loading targets:', error);
+                // Fallback to default
+                currentTarget = {
+                    targetId: 'talking-orange_default',
+                    userId: 'talking-orange',
+                    filename: 'targets.mind',
+                    url: './media/targets.mind',
+                    media: [],
+                    isDefault: true
+                };
+            }
+        }
+        
+        function initializeARSystem() {
+            const scene = document.querySelector('#ar-scene');
+            const marker = document.querySelector('#ar-marker');
             const orangePlane = document.querySelector('#talking-orange-plane');
+            const assets = document.querySelector('#ar-assets');
             
             console.log('🔍 [SCENE] Scene:', scene);
             console.log('🔍 [SCENE] Marker:', marker);
             console.log('🔍 [SCENE] Orange Plane:', orangePlane);
+            
+            if (!currentTarget) {
+                console.error('❌ No target available for AR initialization');
+                return;
+            }
+            
+            // Set up MindAR with the selected target
+            const targetUrl = currentTarget.url;
+            console.log(`🎯 Initializing AR with target: ${targetUrl}`);
+            
+            scene.setAttribute('mindar-image', `imageTargetSrc: ${targetUrl}; maxTrack: 1; missTolerance: 80; warmupTolerance: 8; filterMinCF: 0.00001; filterBeta: 10000; uiLoading: yes; uiScanning: no; uiError: yes;`);
+            
+            // Load media assets based on current target
+            loadTargetMedia(assets, orangePlane);
+            
             console.log('🔍 [SCENE] All elements initialized');
             
             // Check Whisper device (CPU/GPU) on startup
@@ -222,8 +338,6 @@
             });
             
             // Initialize immediately (mesh checks will handle readiness)
-            {
-            
             // Add MindAR system debugging
             scene.addEventListener('loaded', function() {
                 console.log('✅ A-Scene loaded');
@@ -241,16 +355,382 @@
                 }
             });
             
-            // Debug camera access
+            // Comprehensive camera and video element logging
+            console.log('📹 [CAMERA] Starting camera diagnostics...');
+            
+            // Check if mediaDevices is available
+            if (!navigator.mediaDevices) {
+                console.error('❌ [CAMERA] navigator.mediaDevices not available');
+            } else {
+                console.log('✅ [CAMERA] navigator.mediaDevices available');
+            }
+            
+            // Test camera access (just for diagnostics - MindAR will request its own stream)
             navigator.mediaDevices.getUserMedia({ video: true })
                 .then(stream => {
-                    console.log('✅ Camera access granted');
-                    stream.getTracks().forEach(track => track.stop()); // Stop immediately, just testing
+                    console.log('✅ [CAMERA] Camera access granted (test)');
+                    console.log('📹 [CAMERA] Stream details:', {
+                        id: stream.id,
+                        active: stream.active,
+                        tracks: stream.getTracks().map(t => ({
+                            kind: t.kind,
+                            enabled: t.enabled,
+                            readyState: t.readyState,
+                            settings: t.getSettings()
+                        }))
+                    });
+                    // Stop test stream - MindAR will request its own stream
+                    stream.getTracks().forEach(track => {
+                        track.stop();
+                        console.log(`🛑 [CAMERA] Stopped test track: ${track.kind} (MindAR will request its own)`);
+                    });
                 })
                 .catch(err => {
-                    console.error('❌ Camera access denied or error:', err);
+                    console.error('❌ [CAMERA] Camera access denied or error:', err);
+                    console.error('❌ [CAMERA] Error name:', err.name);
+                    console.error('❌ [CAMERA] Error message:', err.message);
                     alert('Camera access is required for AR. Please grant camera permissions.');
                 });
+            
+            // Monitor video element creation and state
+            const checkVideoElement = () => {
+                // Check for video elements - MindAR creates them outside the scene sometimes
+                // Check both inside scene and in document body
+                const videoElementsInScene = scene.querySelectorAll('video');
+                const videoElementsInBody = document.querySelectorAll('body video, video');
+                const allVideoElements = Array.from(new Set([...videoElementsInScene, ...videoElementsInBody]));
+                console.log(`📹 [VIDEO] Found ${allVideoElements.length} video element(s) total (${videoElementsInScene.length} in scene, ${videoElementsInBody.length} in body)`);
+                
+                const videoElements = allVideoElements;
+                
+                videoElements.forEach((video, index) => {
+                    console.log(`📹 [VIDEO] Video element ${index}:`, {
+                        id: video.id,
+                        src: video.src,
+                        srcObject: video.srcObject ? 'has stream' : 'no stream',
+                        readyState: video.readyState,
+                        videoWidth: video.videoWidth,
+                        videoHeight: video.videoHeight,
+                        width: video.width,
+                        height: video.height,
+                        visible: video.offsetParent !== null,
+                        display: window.getComputedStyle(video).display,
+                        visibility: window.getComputedStyle(video).visibility,
+                        opacity: window.getComputedStyle(video).opacity,
+                        zIndex: window.getComputedStyle(video).zIndex,
+                        position: window.getComputedStyle(video).position
+                    });
+                    
+                    // Check if video has a stream
+                    if (video.srcObject) {
+                        const stream = video.srcObject;
+                        console.log(`📹 [VIDEO] Video ${index} stream:`, {
+                            active: stream.active,
+                            tracks: stream.getTracks().length
+                        });
+                    } else {
+                        console.warn(`⚠️ [VIDEO] Video element ${index} has no srcObject (no camera stream attached)`);
+                    }
+                    
+                    // Monitor video events
+                    video.addEventListener('loadedmetadata', () => {
+                        console.log(`✅ [VIDEO] Video ${index} metadata loaded:`, {
+                            videoWidth: video.videoWidth,
+                            videoHeight: video.videoHeight,
+                            duration: video.duration
+                        });
+                    });
+                    
+                    video.addEventListener('playing', () => {
+                        console.log(`▶️ [VIDEO] Video ${index} started playing`);
+                    });
+                    
+                    video.addEventListener('pause', () => {
+                        console.warn(`⏸️ [VIDEO] Video ${index} paused`);
+                    });
+                    
+                    video.addEventListener('error', (e) => {
+                        console.error(`❌ [VIDEO] Video ${index} error:`, e);
+                    });
+                });
+                
+                // Also check canvas element (A-Frame renders to canvas)
+                const canvas = scene.querySelector('canvas');
+                if (canvas) {
+                    const canvasStyle = window.getComputedStyle(canvas);
+                    console.log('🎨 [CANVAS] Canvas element found:', {
+                        width: canvas.width,
+                        height: canvas.height,
+                        visible: canvas.offsetParent !== null,
+                        display: canvasStyle.display,
+                        zIndex: canvasStyle.zIndex,
+                        position: canvasStyle.position,
+                        opacity: canvasStyle.opacity,
+                        backgroundColor: canvasStyle.backgroundColor
+                    });
+                } else {
+                    console.warn('⚠️ [CANVAS] No canvas element found in scene');
+                }
+                
+                // Check body and scene background
+                const bodyStyle = window.getComputedStyle(document.body);
+                const sceneStyle = window.getComputedStyle(scene);
+                console.log('🎨 [STYLES] Body styles:', {
+                    backgroundColor: bodyStyle.backgroundColor,
+                    width: bodyStyle.width,
+                    height: bodyStyle.height,
+                    overflow: bodyStyle.overflow
+                });
+                console.log('🎨 [STYLES] Scene styles:', {
+                    backgroundColor: sceneStyle.backgroundColor,
+                    width: sceneStyle.width,
+                    height: sceneStyle.height,
+                    position: sceneStyle.position,
+                    zIndex: sceneStyle.zIndex
+                });
+            };
+            
+            // Check video element immediately and periodically
+            setTimeout(checkVideoElement, 500); // Check after 500ms
+            setTimeout(checkVideoElement, 1000); // Check after 1s
+            setTimeout(checkVideoElement, 2000); // Check after 2s
+            setTimeout(checkVideoElement, 3000); // Check after 3s
+            
+            // Also check when scene is loaded
+            scene.addEventListener('loaded', () => {
+                setTimeout(checkVideoElement, 500);
+            });
+            
+            // Monitor MindAR video element creation
+            const checkMindARVideo = () => {
+                const mindarSystem = scene.systems['mindar-image-system'];
+                if (mindarSystem) {
+                    // Check if video exists in system or in DOM
+                    const videoInSystem = mindarSystem.video;
+                    const videoInDOM = document.querySelector('video');
+                    
+                    console.log('📹 [MINDAR] MindAR system video check:', {
+                        hasVideoInSystem: !!videoInSystem,
+                        hasVideoInDOM: !!videoInDOM,
+                        videoElement: videoInSystem ? {
+                            readyState: videoInSystem.readyState,
+                            videoWidth: videoInSystem.videoWidth,
+                            videoHeight: videoInSystem.videoHeight,
+                            srcObject: videoInSystem.srcObject ? 'has stream' : 'no stream'
+                        } : (videoInDOM ? {
+                            readyState: videoInDOM.readyState,
+                            videoWidth: videoInDOM.videoWidth,
+                            videoHeight: videoInDOM.videoHeight,
+                            srcObject: videoInDOM.srcObject ? 'has stream' : 'no stream',
+                            display: window.getComputedStyle(videoInDOM).display,
+                            visibility: window.getComputedStyle(videoInDOM).visibility
+                        } : 'no video element found')
+                    });
+                    
+                    // If video exists but isn't visible, try to make it visible
+                    if (videoInDOM) {
+                        const videoStyle = window.getComputedStyle(videoInDOM);
+                        if (videoStyle.display === 'none' || videoStyle.visibility === 'hidden' || parseFloat(videoStyle.opacity) === 0) {
+                            console.warn('⚠️ [VIDEO] Video element found but hidden, attempting to show...', {
+                                display: videoStyle.display,
+                                visibility: videoStyle.visibility,
+                                opacity: videoStyle.opacity
+                            });
+                            videoInDOM.style.cssText = `
+                                display: block !important;
+                                visibility: visible !important;
+                                opacity: 1 !important;
+                                width: 100% !important;
+                                height: 100% !important;
+                                position: absolute !important;
+                                top: 0 !important;
+                                left: 0 !important;
+                                z-index: 0 !important;
+                                object-fit: cover !important;
+                            `;
+                        }
+                    }
+                }
+            };
+            
+            // Check MindAR video after system is ready
+            const mindarCheckInterval = setInterval(() => {
+                if (scene.systems && scene.systems['mindar-image-system']) {
+                    checkMindARVideo();
+                    clearInterval(mindarCheckInterval);
+                }
+            }, 200);
+            
+            // Stop checking after 5 seconds
+            setTimeout(() => clearInterval(mindarCheckInterval), 5000);
+            
+            // Check for MindAR system (check immediately and periodically if not ready)
+            const checkMindAR = () => {
+                if (scene && scene.systems && scene.systems['mindar-image-system']) {
+                    console.log('✅ MindAR system found:', scene.systems['mindar-image-system']);
+                    return true;
+                }
+                return false;
+            };
+            
+            // Check immediately first
+            if (!checkMindAR()) {
+                // If not ready, check periodically (but don't delay page load)
+                const checkInterval = setInterval(() => {
+                    if (checkMindAR()) {
+                        clearInterval(checkInterval);
+                    }
+                }, 100); // Check every 100ms instead of waiting 3 seconds
+                
+                // Stop checking after 5 seconds max
+                setTimeout(() => clearInterval(checkInterval), 5000);
+            }
+        }
+        
+        function loadTargetMedia(assets, orangePlane) {
+            if (!currentTargetMedia || currentTargetMedia.length === 0) {
+                console.warn('⚠️ No media files for current target, using default paths');
+                // Fallback to default media paths
+                loadDefaultMedia(assets);
+                return;
+            }
+            
+            console.log(`📦 Loading ${currentTargetMedia.length} media files for target...`);
+            
+            // Find image files for different states
+            const images = currentTargetMedia.filter(m => m.type === 'image');
+            const smileImg = images.find(m => m.filename.includes('smile')) || images[0];
+            const winkImg = images.find(m => m.filename.includes('wink'));
+            const thinkingImgs = images.filter(m => m.filename.includes('thinking')).sort();
+            const talkingImgs = images.filter(m => m.filename.includes('talking')).sort();
+            
+            // Create asset elements
+            if (smileImg) {
+                const img = document.createElement('img');
+                img.id = 'talking-orange';
+                img.src = smileImg.url;
+                assets.appendChild(img);
+                orangePlane.setAttribute('src', '#talking-orange');
+            }
+            
+            if (winkImg) {
+                const img = document.createElement('img');
+                img.id = 'talking-orange-wink';
+                img.src = winkImg.url;
+                assets.appendChild(img);
+            }
+            
+            thinkingImgs.forEach((imgFile, index) => {
+                const img = document.createElement('img');
+                img.id = `talking-orange-thinking-${index + 1}`;
+                img.src = imgFile.url;
+                assets.appendChild(img);
+            });
+            
+            talkingImgs.forEach((imgFile, index) => {
+                const img = document.createElement('img');
+                img.id = `talking-orange-talking-${index + 1}`;
+                img.src = imgFile.url;
+                assets.appendChild(img);
+            });
+            
+            // Find video animations and build URLs
+            const videoAnimations = currentTargetMedia.filter(m => m.type === 'video_animation');
+            console.log(`📹 Found ${videoAnimations.length} video animation(s)`);
+            
+                    // Build video animation URLs with user ID and project name
+                    const videoAnimUrls = videoAnimations.map(anim => {
+                        if (currentTarget && currentTarget.userId && currentTarget.projectName) {
+                            return {
+                                filename: anim.filename,
+                                url: `/api/users/${currentTarget.userId}/${currentTarget.projectName}/media/videos/${anim.filename}/`
+                            };
+                        } else if (currentTarget && currentTarget.userId) {
+                            // Fallback to old structure if no projectName
+                            return {
+                                filename: anim.filename,
+                                url: `/api/users/${currentTarget.userId}/media/videos/${anim.filename}/`
+                            };
+                        }
+                        return anim;
+                    });
+            
+            // Store video animation URLs for later use
+            window.targetVideoAnimations = videoAnimUrls;
+            window.currentTarget = currentTarget; // Make available globally
+            
+            // Don't load project UI here - wait for target to be actually detected
+            // Project UI will be loaded when targetFound event fires
+            
+            // If animation module exists, reload frame animations now that we have target info
+            if (window.animationModule && typeof window.animationModule.loadFrameAnimations === 'function') {
+                console.log('🔄 Reloading frame animations with target media URLs...');
+                // Update paths in animation module based on current target
+                if (typeof window.animationModule.updatePathsFromTarget === 'function') {
+                    window.animationModule.updatePathsFromTarget();
+                }
+                window.animationModule.loadFrameAnimations().catch(err => {
+                    console.warn('⚠️ Frame animation reload error (non-critical):', err);
+                });
+            }
+            
+            // Update animation controller audio URLs with correct project-based paths
+            if (window.thinkingController && currentTarget) {
+                const thinkingAudioUrl = getAudioUrl('thinking-hmm.mp3');
+                if (thinkingAudioUrl && thinkingAudioUrl !== window.thinkingController.audioUrl) {
+                    console.log(`🔄 Updating thinking controller audio URL: ${thinkingAudioUrl}`);
+                    window.thinkingController.audioUrl = thinkingAudioUrl;
+                }
+            }
+            
+            if (window.talkingController && currentTarget) {
+                const currentLang = window.currentLanguage || 'en';
+                const introAudioUrl = currentLang === 'es' 
+                    ? getAudioUrl('talking-intro-es.mp3')
+                    : getAudioUrl('talking-intro.mp3');
+                if (introAudioUrl && introAudioUrl !== window.talkingController.introAudioUrl) {
+                    console.log(`🔄 Updating talking controller audio URL: ${introAudioUrl}`);
+                    window.talkingController.introAudioUrl = introAudioUrl;
+                }
+            }
+            
+            console.log('✅ Target media loaded');
+        }
+        
+        function loadDefaultMedia(assets) {
+            // Fallback to default media paths - try to use API if target is available
+            const target = window.currentTarget || currentTarget;
+            let basePath = './media/';
+            
+            if (target && target.userId && target.projectName) {
+                basePath = `/api/users/${target.userId}/${target.projectName}/media/`;
+            } else if (target && target.userId) {
+                basePath = `/api/users/${target.userId}/media/`;
+            }
+            
+            const defaultImages = [
+                { id: 'talking-orange', src: `${basePath}talking-orange-smile.png` },
+                { id: 'talking-orange-wink', src: `${basePath}talking-orange-wink.png` },
+                { id: 'talking-orange-thinking-1', src: `${basePath}talking-orange-thinking-1.png` },
+                { id: 'talking-orange-thinking-2', src: `${basePath}talking-orange-thinking-2.png` },
+                { id: 'talking-orange-talking-1', src: `${basePath}talking-orange-talking-1.png` },
+                { id: 'talking-orange-talking-2', src: `${basePath}talking-orange-talking-2.png` },
+                { id: 'talking-orange-talking-3', src: `${basePath}talking-orange-talking-3.png` },
+                { id: 'talking-orange-talking-4', src: `${basePath}talking-orange-talking-4.png` }
+            ];
+            
+            defaultImages.forEach(imgData => {
+                const img = document.createElement('img');
+                img.id = imgData.id;
+                img.src = imgData.src;
+                assets.appendChild(img);
+            });
+            
+            const orangePlane = document.querySelector('#talking-orange-plane');
+            if (orangePlane) {
+                orangePlane.setAttribute('src', '#talking-orange');
+            }
+        }
             
             // ========================================
             // TALKING ANIMATION MODULE
@@ -259,11 +739,15 @@
                 constructor(orangePlane) {
                     this.orangePlane = orangePlane;
                     
+                    // Initialize with fallback paths - will be updated when target is loaded
                     this.idleState = { id: '#talking-orange', name: 'smile', src: './media/talking-orange-smile.png' };
                     this.thinkingStates = [
                         { id: '#talking-orange-thinking-1', name: 'thinking-1', src: './media/talking-orange-thinking-1.png' },
                         { id: '#talking-orange-thinking-2', name: 'thinking-2', src: './media/talking-orange-thinking-2.png' }
                     ];
+                    
+                    // Update paths based on current target if available
+                    this.updatePathsFromTarget();
                     
                     // Load talking states dynamically (sorted by number: 1, 2, 3, etc.)
                     this.talkingStates = this.loadTalkingStates();
@@ -292,6 +776,32 @@
                     this.init();
                 }
                 
+                // Update paths based on current target (called after target is loaded)
+                updatePathsFromTarget() {
+                    const target = window.currentTarget || currentTarget;
+                    if (target && target.userId && target.projectName) {
+                        // Update idle state path
+                        this.idleState.src = `/api/users/${target.userId}/${target.projectName}/media/talking-orange-smile.png`;
+                        // Update thinking states paths
+                        if (this.thinkingStates.length > 0) {
+                            this.thinkingStates[0].src = `/api/users/${target.userId}/${target.projectName}/media/talking-orange-thinking-1.png`;
+                        }
+                        if (this.thinkingStates.length > 1) {
+                            this.thinkingStates[1].src = `/api/users/${target.userId}/${target.projectName}/media/talking-orange-thinking-2.png`;
+                        }
+                    } else if (target && target.userId) {
+                        // Fallback to old structure
+                        this.idleState.src = `/api/users/${target.userId}/media/talking-orange-smile.png`;
+                        if (this.thinkingStates.length > 0) {
+                            this.thinkingStates[0].src = `/api/users/${target.userId}/media/talking-orange-thinking-1.png`;
+                        }
+                        if (this.thinkingStates.length > 1) {
+                            this.thinkingStates[1].src = `/api/users/${target.userId}/media/talking-orange-thinking-2.png`;
+                        }
+                    }
+                    // If no target, keep fallback paths
+                }
+                
                 init() {
                     console.log('🎭 Initializing Talking Animation Module');
                     // Load frame animations asynchronously (non-blocking)
@@ -307,20 +817,58 @@
                     // Optimized: Skip slow discovery - we know there are 145 frames
                     // Just check if first frame exists, then generate all paths
                     try {
+                        // Check if target is available - if not, skip (will be called again after target loads)
+                        const target = window.currentTarget || currentTarget;
+                        if (!target || !target.userId) {
+                            console.log('⏳ [FRAMES] Target not loaded yet, skipping frame animation loading (will retry after target loads)');
+                            return;
+                        }
+                        
+                        // Get base URLs for video animations (will use project-based paths if available)
+                        const talkingBaseUrl = this.getVideoBaseUrl('talking-orange-talking-animation');
+                        const thinkingBaseUrl = this.getVideoBaseUrl('talking-orange-thinking-animation');
+                        
+                        console.log(`🔍 [FRAMES] Checking frame animations at:`, {
+                            talking: talkingBaseUrl,
+                            thinking: thinkingBaseUrl
+                        });
+                        
                         // Quick check if talking animation exists (single HEAD request)
-                        const talkingResponse = await fetch('./media/videos/talking-orange-talking-animation/frame_00000.png', { method: 'HEAD' });
-                        if (talkingResponse.ok) {
-                            // Generate frame paths directly (no sequential discovery needed)
-                            this.talkingFrames = this.generateFramePaths('talking-orange-talking-animation', 145);
-                            console.log(`✅ Generated ${this.talkingFrames.length} talking animation frame paths`);
+                        try {
+                            const talkingResponse = await fetch(`${talkingBaseUrl}frame_00000.png`, { method: 'HEAD' });
+                            if (talkingResponse.ok) {
+                                // Generate frame paths directly (no sequential discovery needed)
+                                this.talkingFrames = this.generateFramePaths('talking-orange-talking-animation', 145);
+                                console.log(`✅ Generated ${this.talkingFrames.length} talking animation frame paths`);
+                            } else if (talkingResponse.status !== 404) {
+                                // Only log non-404 errors (404 is expected if frames don't exist)
+                                console.log(`⚠️ [FRAMES] Talking animation check failed at ${talkingBaseUrl}frame_00000.png (status: ${talkingResponse.status})`);
+                            }
+                        } catch (err) {
+                            // Silently handle fetch errors (network issues, CORS, etc.)
+                            // Don't log 404s as they're expected if frames don't exist
+                            if (!err.message.includes('404') && !err.message.includes('Failed to fetch')) {
+                                console.warn(`⚠️ [FRAMES] Error checking talking animation:`, err.message);
+                            }
                         }
                         
                         // Quick check if thinking animation exists (single HEAD request)
-                        const thinkingResponse = await fetch('./media/videos/talking-orange-thinking-animation/frame_00000.png', { method: 'HEAD' });
-                        if (thinkingResponse.ok) {
-                            // Generate frame paths directly (no sequential discovery needed)
-                            this.thinkingFrames = this.generateFramePaths('talking-orange-thinking-animation', 145);
-                            console.log(`✅ Generated ${this.thinkingFrames.length} thinking animation frame paths`);
+                        try {
+                            const thinkingResponse = await fetch(`${thinkingBaseUrl}frame_00000.png`, { method: 'HEAD' });
+                            if (thinkingResponse.ok) {
+                                // Generate frame paths directly (no sequential discovery needed)
+                                this.thinkingFrames = this.generateFramePaths('talking-orange-thinking-animation', 145);
+                                console.log(`✅ Generated ${this.thinkingFrames.length} thinking animation frame paths`);
+                            } else if (thinkingResponse.status !== 404) {
+                                // Only log non-404 errors (404 is expected if frames don't exist)
+                                console.log(`⚠️ [FRAMES] Thinking animation check failed at ${thinkingBaseUrl}frame_00000.png (status: ${thinkingResponse.status})`);
+                            }
+                        } catch (err) {
+                            // Silently handle fetch errors (network issues, CORS, etc.)
+                            // Don't log 404s as they're expected if frames don't exist
+                            if (!err.message.includes('404') && !err.message.includes('Failed to fetch')) {
+                                console.warn(`⚠️ [FRAMES] Error checking thinking animation:`, err.message);
+                            }
                         }
                         
                         // Use frame animations if we have them
@@ -363,20 +911,45 @@
                 // Generate frame paths directly (much faster than sequential discovery)
                 generateFramePaths(folderName, frameCount) {
                     const frames = [];
+                    // Use user-specific URL if available, otherwise fallback to default
+                    const baseUrl = this.getVideoBaseUrl(folderName);
                     for (let i = 0; i < frameCount; i++) {
-                        const framePath = `./media/videos/${folderName}/frame_${String(i).padStart(5, '0')}.png`;
+                        const framePath = `${baseUrl}frame_${String(i).padStart(5, '0')}.png`;
                         frames.push(framePath);
                     }
                     return frames;
+                }
+                
+                getVideoBaseUrl(folderName) {
+                    // Check if we have video animations from current target (from window or global)
+                    const target = window.currentTarget || currentTarget;
+                    if (window.targetVideoAnimations && target) {
+                        const videoAnim = window.targetVideoAnimations.find(v => v.filename === folderName);
+                        if (videoAnim && videoAnim.url) {
+                            // Ensure URL ends with /
+                            return videoAnim.url.endsWith('/') ? videoAnim.url : videoAnim.url + '/';
+                        }
+                    }
+                    // Try to construct URL from current target if available (project-based)
+                    if (target && target.userId && target.projectName) {
+                        return `/api/users/${target.userId}/${target.projectName}/media/videos/${folderName}/`;
+                    } else if (target && target.userId) {
+                        // Fallback to old structure if no projectName
+                        return `/api/users/${target.userId}/media/videos/${folderName}/`;
+                    }
+                    // Final fallback to default path (shouldn't happen in normal operation)
+                    console.warn(`⚠️ [VIDEO] No target context, using fallback path for ${folderName}`);
+                    return `./media/videos/${folderName}/`;
                 }
                 
                 // Legacy discovery method (kept for fallback if frame count is unknown)
                 async discoverFrames(folderName) {
                     const frames = [];
                     let frameIndex = 0;
+                    const baseUrl = this.getVideoBaseUrl(folderName);
                     
                     while (true) {
-                        const framePath = `./media/videos/${folderName}/frame_${String(frameIndex).padStart(5, '0')}.png`;
+                        const framePath = `${baseUrl}frame_${String(frameIndex).padStart(5, '0')}.png`;
                         try {
                             // Use HEAD request to check if frame exists without downloading it
                             // This avoids downloading full images just to check existence
@@ -1023,7 +1596,7 @@
                             }, 10);
                             console.log('✅ Smile image restored via setAttribute (geometry reset)');
                         }
-                    this.setToIdleState();
+                        this.setToIdleState();
                     };
                     
                     // Small delay to ensure frame animation interval is cleared
@@ -1047,7 +1620,18 @@
             }
             
             // Initialize the animation module
-            const animationModule = new TalkingAnimationModule(orangePlane);
+            // Get orangePlane element (it's defined in initializeARSystem, but we need it here)
+            const orangePlane = document.querySelector('#talking-orange-plane');
+            let animationModule = null;
+            if (!orangePlane) {
+                console.error('❌ Orange plane element not found! Cannot initialize animation module.');
+                // Skip initialization - animationModule will remain null
+            } else {
+                animationModule = new TalkingAnimationModule(orangePlane);
+            }
+            
+            // Expose animation module globally for access from other functions
+            window.animationModule = animationModule;
             
             // Test: Make orange plane visible immediately to verify it's not a visibility issue
             setTimeout(() => {
@@ -1429,31 +2013,95 @@
                 }
             }
             
-            // Initialize animation controllers
-            const thinkingController = new ThinkingAnimationController(
-                animationModule,
-                './media/videos/talking-orange-thinking-animation/thinking-hmm.mp3'
-            );
-            // Talking controller will be updated based on language
-            let talkingController = new TalkingAnimationController(
-                animationModule,
-                './media/videos/talking-orange-talking-animation/talking-intro.mp3'
-            );
+            // Get audio URLs from current target media or use defaults
+            function getAudioUrl(filename) {
+                if (currentTargetMedia) {
+                    // First try to find exact match
+                    let audioFile = currentTargetMedia.find(m => m.filename === filename);
+                    if (audioFile) return audioFile.url;
+                    
+                    // Then try partial match
+                    audioFile = currentTargetMedia.find(m => m.filename.includes(filename) || filename.includes(m.filename));
+                    if (audioFile) return audioFile.url;
+                    
+                    // Try to construct URL from current target and video directory (project-based)
+                    if (currentTarget && currentTarget.userId && currentTarget.projectName) {
+                        // Audio files are in video directories
+                        if (filename.includes('thinking')) {
+                            return `/api/users/${currentTarget.userId}/${currentTarget.projectName}/media/videos/talking-orange-thinking-animation/thinking-hmm.mp3`;
+                        } else if (filename.includes('intro-es')) {
+                            return `/api/users/${currentTarget.userId}/${currentTarget.projectName}/media/videos/talking-orange-talking-animation/talking-intro-es.mp3`;
+                        } else if (filename.includes('intro') || filename.includes('talking')) {
+                            return `/api/users/${currentTarget.userId}/${currentTarget.projectName}/media/videos/talking-orange-talking-animation/talking-intro.mp3`;
+                        }
+                    } else if (currentTarget && currentTarget.userId) {
+                        // Fallback to old structure if no projectName
+                        if (filename.includes('thinking')) {
+                            return `/api/users/${currentTarget.userId}/media/videos/talking-orange-thinking-animation/thinking-hmm.mp3`;
+                        } else if (filename.includes('intro-es')) {
+                            return `/api/users/${currentTarget.userId}/media/videos/talking-orange-talking-animation/talking-intro-es.mp3`;
+                        } else if (filename.includes('intro') || filename.includes('talking')) {
+                            return `/api/users/${currentTarget.userId}/media/videos/talking-orange-talking-animation/talking-intro.mp3`;
+                        }
+                    }
+                }
+                // Final fallback to default frontend paths (shouldn't happen in normal operation)
+                console.warn(`⚠️ [AUDIO] No target context, using fallback path for ${filename}`);
+                if (filename.includes('thinking')) {
+                    return './media/videos/talking-orange-thinking-animation/thinking-hmm.mp3';
+                } else if (filename.includes('intro-es')) {
+                    return './media/videos/talking-orange-talking-animation/talking-intro-es.mp3';
+                } else {
+                    return './media/videos/talking-orange-talking-animation/talking-intro.mp3';
+                }
+            }
+            
+            // Initialize animation controllers (only if animationModule was created)
+            let thinkingController = null;
+            let talkingController = null;
+            
+            if (animationModule) {
+                thinkingController = new ThinkingAnimationController(
+                    animationModule,
+                    getAudioUrl('thinking-hmm.mp3')
+                );
+                // Talking controller will be updated based on language
+                talkingController = new TalkingAnimationController(
+                    animationModule,
+                    getAudioUrl('talking-intro.mp3')
+                );
+            } else {
+                console.warn('⚠️ Animation module not initialized - controllers will not be available');
+            }
+            
+            // Make controllers available globally for test functions
+            window.thinkingController = thinkingController;
+            window.talkingController = talkingController;
             
             // Function to update talking controller intro audio based on language
             function updateTalkingControllerLanguage(lang) {
+                if (!animationModule) {
+                    console.warn('⚠️ Cannot update talking controller language - animation module not initialized');
+                    return;
+                }
                 const introAudioUrl = lang === 'es' 
-                    ? './media/videos/talking-orange-talking-animation/talking-intro-es.mp3'
-                    : './media/videos/talking-orange-talking-animation/talking-intro.mp3';
-                talkingController = new TalkingAnimationController(
-                    animationModule,
-                    introAudioUrl
-                );
+                    ? getAudioUrl('talking-intro-es.mp3')
+                    : getAudioUrl('talking-intro.mp3');
+                if (introAudioUrl) {
+                    talkingController = new TalkingAnimationController(
+                        animationModule,
+                        introAudioUrl
+                    );
+                    window.talkingController = talkingController; // Update global reference
+                    console.log(`🔄 Updated talking controller with ${lang} audio: ${introAudioUrl}`);
+                } else {
+                    console.warn('⚠️ Could not get audio URL for talking controller');
+                }
             }
             
             // Legacy audio functions (deprecated - use controllers instead)
             let thinkingAudio = null;
-            const thinkingAudioUrl = './media/videos/talking-orange-thinking-animation/thinking-hmm.mp3';
+            const thinkingAudioUrl = getAudioUrl('thinking-hmm.mp3');
             
             // Play thinking audio in a loop (using pre-generated static file)
             function playThinkingAudioLoop() {
@@ -1532,23 +2180,39 @@
             
             // Expose functions for external control (conversation flow - loops)
             function startTalkingAnimation() {
-                talkingController.start({ loop: true });
+                if (talkingController) {
+                    talkingController.start({ loop: true });
+                } else {
+                    console.warn('⚠️ Talking controller not available');
+                }
             }
             
             // Global audio object to track current playback
             let currentAudio = null;
             
             function stopTalkingAnimation() {
-                talkingController.stop();
+                if (talkingController) {
+                    talkingController.stop();
+                } else {
+                    console.warn('⚠️ Talking controller not available');
+                }
             }
             
             function startThinkingAnimation() {
                 // Conversation mode: loop animation, play audio once per cycle
-                thinkingController.start({ loop: true, playAudio: true });
+                if (thinkingController) {
+                    thinkingController.start({ loop: true, playAudio: true });
+                } else {
+                    console.warn('⚠️ Thinking controller not available');
+                }
             }
             
             function stopThinkingAnimation() {
-                thinkingController.stop();
+                if (thinkingController) {
+                    thinkingController.stop();
+                } else {
+                    console.warn('⚠️ Thinking controller not available');
+                }
             }
             
             // Stop audio playback and animation
@@ -1580,13 +2244,15 @@
             }
             
             // Voice recording and processing system
+            // Declare variables first to avoid temporal dead zone issues
             let mediaRecorder = null;
             let audioChunks = [];
             let isRecording = false;
             let recordingTimer = null;
             let recordingStartTime = null;
             
-            async function askQuestion() {
+            // Make askQuestion available on window immediately
+            window.askQuestion = async function askQuestion() {
                 if (isRecording) {
                     console.log('Stopping recording...');
                     stopRecording();
@@ -2119,16 +2785,46 @@
             // Language toggle functionality
             let currentLanguage = 'en';
             
+            // Burger menu toggle
+            function toggleBurgerMenu() {
+                const menu = document.getElementById('burger-menu');
+                if (menu) {
+                    const isVisible = menu.style.display !== 'none';
+                    menu.style.display = isVisible ? 'none' : 'block';
+                }
+            }
+            
+            // Close burger menu when clicking outside
+            document.addEventListener('click', function(event) {
+                const menu = document.getElementById('burger-menu');
+                const btn = document.getElementById('burger-menu-btn');
+                if (menu && btn && !menu.contains(event.target) && !btn.contains(event.target)) {
+                    menu.style.display = 'none';
+                }
+            });
+            
+            window.toggleBurgerMenu = toggleBurgerMenu; // Expose burger menu toggle
+            
             function toggleLanguage() {
                 currentLanguage = currentLanguage === 'en' ? 'es' : 'en';
+                window.currentLanguage = currentLanguage; // Update global for project UI
                 const button = document.getElementById('language-toggle');
-                button.textContent = currentLanguage.toUpperCase();
+                if (button) button.textContent = currentLanguage.toUpperCase();
+                const langDisplay = document.getElementById('lang-display');
+                if (langDisplay) langDisplay.textContent = currentLanguage.toUpperCase();
                 updateButtonText();
-                updateTalkingControllerLanguage(currentLanguage);
+                if (window.updateTalkingControllerLanguage) {
+                    window.updateTalkingControllerLanguage(currentLanguage);
+                }
             }
             
             function updateButtonText() {
+                // Button is now in project UI file, so check if it exists
                 const button = document.getElementById('ask-question-btn');
+                if (!button) {
+                    // Button not loaded yet (project UI not loaded), skip
+                    return;
+                }
                 
                 if (currentLanguage === 'es') {
                     button.textContent = 'Hacer Pregunta';
@@ -2137,7 +2833,8 @@
                 }
             }
             
-            // Initialize button text
+            // Initialize button text (only if button exists - project UI may not be loaded yet)
+            // This will be called again after project UI loads
             updateButtonText();
             
             // Expose functions globally for external control
@@ -2146,16 +2843,16 @@
             window.startThinkingAnimation = startThinkingAnimation;
             window.stopThinkingAnimation = stopThinkingAnimation;
             window.stopAudio = stopAudio;
-            window.askQuestion = askQuestion;
+            // askQuestion is already assigned to window at definition (line 1847)
             window.toggleLanguage = toggleLanguage; // Expose language toggle
             window.animationModule = animationModule; // Expose for console debugging
             
-            // Test animation functions (single play mode)
+            // Test animation functions (single play mode) - define early so buttons can use them
             window.testThinkingAnimation = function() {
                 console.log('🧪 Testing thinking animation (one cycle)...');
                 // Stop any existing animations
-                stopTalkingAnimation();
-                stopThinkingAnimation();
+                if (window.stopTalkingAnimation) window.stopTalkingAnimation();
+                if (window.stopThinkingAnimation) window.stopThinkingAnimation();
                 // Small delay to ensure previous animation is fully stopped
                 setTimeout(() => {
                     // Reset state before starting
@@ -2165,15 +2862,19 @@
                         window.animationModule.isThinking = false;
                     }
                     // Test mode: single play (no loop), with audio
-                    thinkingController.start({ loop: false, playAudio: true });
+                    if (window.thinkingController) {
+                        window.thinkingController.start({ loop: false, playAudio: true });
+                    } else {
+                        console.error('❌ thinkingController not available');
+                    }
                 }, 150);
             };
             
             window.testTalkingAnimation = function() {
                 console.log('🧪 Testing talking animation (one cycle with intro)...');
                 // Stop any existing animations
-                stopTalkingAnimation();
-                stopThinkingAnimation();
+                if (window.stopTalkingAnimation) window.stopTalkingAnimation();
+                if (window.stopThinkingAnimation) window.stopThinkingAnimation();
                 // Small delay to ensure previous animation is fully stopped
                 setTimeout(() => {
                     // Reset state before starting
@@ -2184,10 +2885,15 @@
                         window.animationModule.isTalking = false;
                     }
                     // Test mode: single play (no loop) with intro audio
-                    talkingController.start({ loop: false, playIntro: true });
+                    if (window.talkingController) {
+                        window.talkingController.start({ loop: false, playIntro: true });
+                    } else {
+                        console.error('❌ talkingController not available');
+                    }
                 }, 150);
             };
             
+            const marker = document.querySelector('#ar-marker');
             if (marker) {
                 // Enhanced smoothing with frame averaging and dead zone filtering
                 let lastPosition = { x: 0, y: 0, z: 0 };
@@ -2242,9 +2948,22 @@
                 
                 console.log('🎯 [TRACKING] Setting up tracking event listeners...');
                 
+                // Track if we've loaded the project UI (only load once)
+                let projectUILoaded = false;
+                
                 marker.addEventListener('targetFound', function() {
                     console.log('✅ [TRACKING] Target FOUND - Marker detected!');
                     consecutiveFrames++;
+                    
+                    // Load project-specific UI on first detection (only once)
+                    if (consecutiveFrames === 1 && !projectUILoaded && currentTarget && currentTarget.userId && currentTarget.projectName) {
+                        console.log('📦 Loading project UI for detected target...');
+                        loadProjectUI(currentTarget.userId, currentTarget.projectName).then(() => {
+                            projectUILoaded = true;
+                        }).catch(err => {
+                            console.warn('⚠️ Failed to load project UI:', err);
+                        });
+                    }
                     
                     // Log first detection and milestones
                     if (consecutiveFrames === 1) {
@@ -2289,10 +3008,25 @@
                     if (orangePlaneMesh) {
                         orangePlaneMesh.visible = true;
                     }
+                    
+                    // Show project UI when target is found (if it's been loaded)
+                    const projectUIContainer = document.getElementById('project-ui-container');
+                    if (projectUIContainer && projectUIContainer.innerHTML.trim() !== '') {
+                        projectUIContainer.style.display = 'block';
+                        console.log('👁️ Showing project UI (target found)');
+                    }
                 });
                 
                 marker.addEventListener('targetLost', function() {
                     console.log('❌ [TRACKING] Target LOST - Marker no longer detected!');
+                    
+                    // Hide project UI when target is lost (but don't remove it, just hide)
+                    const projectUIContainer = document.getElementById('project-ui-container');
+                    if (projectUIContainer && projectUIContainer.innerHTML.trim() !== '') {
+                        projectUIContainer.style.display = 'none';
+                        console.log('👁️ Hiding project UI (target lost)');
+                    }
+                    
                     const now = performance.now();
                     const timeSinceLastLoss = now - lastTargetLostTime;
                     lastTargetLostTime = now;
@@ -2792,30 +3526,6 @@
                 console.log('  - window.trackingDebug.getOrangePlaneRotation() - Get orange plane rotation');
                 console.log('  - window.trackingDebug.clearHistory() - Clear tracking history');
             }
-            
-            // Check for MindAR system (check immediately and periodically if not ready)
-            const checkMindAR = () => {
-                if (scene && scene.systems && scene.systems['mindar-image-system']) {
-                    console.log('✅ MindAR system found:', scene.systems['mindar-image-system']);
-                    return true;
-                }
-                return false;
-            };
-            
-            // Check immediately first
-            if (!checkMindAR()) {
-                // If not ready, check periodically (but don't delay page load)
-                const checkInterval = setInterval(() => {
-                    if (checkMindAR()) {
-                        clearInterval(checkInterval);
-                    }
-                }, 100); // Check every 100ms instead of waiting 3 seconds
-                
-                // Stop checking after 5 seconds max
-                setTimeout(() => clearInterval(checkInterval), 5000);
-            }
-            } // End of initialization block
-        });
     </script>
 </body>
 </html>
