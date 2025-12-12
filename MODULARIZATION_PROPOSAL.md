@@ -5,6 +5,7 @@
 - **Main Issue**: All JavaScript is in a single file, making it difficult to maintain and debug
 - **Specific Problem**: Video feed logic is buried in the middle of the file, making it hard to isolate issues
 - **Architecture Issue**: Project-specific code (talking-orange animations, voice processing) is mixed with core AR functionality
+- **Architecture Issue**: Project-specific code (talking-orange animations, voice processing) is mixed with core AR functionality
 
 ## Proposed Modularization Strategy
 
@@ -169,25 +170,64 @@ backend/users/{user_id}/{project_name}/
 
 ## Module Loading Strategy
 
-### Option A: Script Tags (Simple)
+### Core Modules (Always Loaded - in index.html)
 ```html
+<!-- Core modules loaded immediately on page load -->
 <script src="./js/camera-video.js"></script>
 <script src="./js/ar-core.js"></script>
-<script src="./js/animation-module.js"></script>
-<script src="./js/animation-controllers.js"></script>
-<script src="./js/voice-processing.js"></script>
 <script src="./js/tracking-system.js"></script>
 <script src="./js/ui-helpers.js"></script>
 ```
 
-### Option B: ES6 Modules (Modern, but requires build step)
+### Project-Specific Modules (Loaded After Target Detection)
 ```javascript
-import { setupCameraDiagnostics } from './js/camera-video.js';
-import { initializeARSystem } from './js/ar-core.js';
-// etc.
+// In index.html, after targetFound event fires:
+async function loadProjectModules(userId, projectName) {
+    const modules = [
+        'animation-module.js',      // Must load first
+        'animation-controllers.js', // Depends on animation-module
+        'voice-processing.js'       // Depends on animation-controllers
+    ];
+    
+    console.log(`📦 Loading project modules for ${userId}/${projectName}...`);
+    
+    for (const module of modules) {
+        try {
+            const moduleUrl = `/api/users/${userId}/${projectName}/js/${module}`;
+            const response = await fetch(moduleUrl);
+            
+            if (response.ok) {
+                const script = document.createElement('script');
+                script.textContent = await response.text();
+                document.head.appendChild(script);
+                console.log(`✅ Loaded project module: ${module}`);
+            } else if (response.status === 404) {
+                console.warn(`⚠️ Project module not found: ${module} (optional, project may not need it)`);
+            } else {
+                console.error(`❌ Error loading project module ${module}: ${response.status}`);
+            }
+        } catch (error) {
+            console.warn(`⚠️ Error loading project module ${module}:`, error);
+            // Continue loading other modules even if one fails
+        }
+    }
+    
+    console.log(`✅ Finished loading project modules for ${userId}/${projectName}`);
+}
+
+// Call this in the targetFound event handler (first detection only)
+marker.addEventListener('targetFound', function() {
+    if (consecutiveFrames === 1 && currentTarget && currentTarget.userId && currentTarget.projectName) {
+        loadProjectModules(currentTarget.userId, currentTarget.projectName);
+    }
+});
 ```
 
-**Recommendation**: Start with Option A (script tags) for simplicity. Can migrate to ES6 modules later if needed.
+**Recommendation**: 
+- Use script tags for core modules (simple, reliable)
+- Use dynamic script injection for project-specific modules (allows per-project customization)
+- Load project modules sequentially to respect dependencies
+- Handle missing modules gracefully (some projects may not need all modules)
 
 ---
 
@@ -239,8 +279,24 @@ Project Folder (backend/users/{user_id}/{project_name}/js/)
 
 ## Next Steps
 
-1. Review this proposal
-2. Start with `camera-video.js` extraction
-3. Test thoroughly after each extraction
-4. Update as needed based on experience
+1. ✅ Review this proposal (updated for project-specific modules)
+2. ✅ Push changes to current branch (AR branch)
+3. **Phase 1: Core Modules** - Extract core modules first:
+   - Start with `camera-video.js` extraction (addresses video feed issues)
+   - Extract `ui-helpers.js` (easiest, low risk)
+   - Extract `ar-core.js` (foundation, needed by others)
+   - Extract `tracking-system.js` (core AR tracking)
+4. **Phase 2: Backend Infrastructure** - Add support for project modules:
+   - Add backend endpoint `/api/users/<user_id>/<project_name>/js/<filename>` for serving project JS files
+   - Update `user_manager.py` to handle `js/` directory in project structure
+5. **Phase 3: Project-Specific Modules** - Extract to project folders:
+   - Extract `animation-module.js` to `backend/users/user-talking-orange/talking-orange/js/`
+   - Extract `animation-controllers.js` to project folder
+   - Extract `voice-processing.js` to project folder
+   - Update `index.html` to load project modules after target detection
+6. **Testing & Refinement**:
+   - Test thoroughly after each extraction
+   - Verify project modules load correctly after target identification
+   - Ensure backward compatibility (graceful fallback if project modules missing)
+   - Update documentation as needed
 
