@@ -22,12 +22,16 @@ frontend/
 ├── index.html (reduced to ~800-1000 lines)
 ├── js/
 │   ├── camera-video.js (~250 lines) ⭐ HIGH PRIORITY
-│   ├── animation-module.js (~900 lines)
-│   ├── animation-controllers.js (~400 lines)
-│   ├── voice-processing.js (~600 lines)
 │   ├── tracking-system.js (~650 lines)
 │   ├── ar-core.js (~400 lines)
 │   └── ui-helpers.js (~150 lines)
+
+backend/users/{user_id}/{project_name}/
+├── ui.html (project-specific UI)
+├── js/
+│   ├── animation-module.js (~900 lines) ⚠️ PROJECT-SPECIFIC
+│   ├── animation-controllers.js (~400 lines) ⚠️ PROJECT-SPECIFIC
+│   └── voice-processing.js (~600 lines) ⚠️ PROJECT-SPECIFIC
 ```
 
 ---
