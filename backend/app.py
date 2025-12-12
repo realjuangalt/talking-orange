@@ -320,13 +320,16 @@ def process_speech():
         text = data.get('text', '')
         audio_data = data.get('audioData', '')
         session_id = data.get('sessionId', 'anonymous')
-        project_name = data.get('projectName', 'default')  # Get project name from request
+        # Get userId and projectName from request (preferred) or use defaults
+        user_id = data.get('userId', None)
+        project_name = data.get('projectName', 'default')
         language = data.get('language', 'en')
         tts_voice = data.get('ttsVoice', 'default')
         tts_engine = data.get('ttsEngine', 'auto')
         
         logger.info(f"🎤 Audio data present: {bool(audio_data)}, Text present: {bool(text)}")
         logger.info(f"🌍 Language: {language}, Session: {session_id}")
+        logger.info(f"👤 Request userId: {user_id}, Request projectName: {project_name}")
         
         # Validate that we have either audio or text
         if not audio_data and not text:
@@ -365,9 +368,18 @@ def process_speech():
                 logger.info(f"🔊 Audio buffer type: {type(audio_buffer)}")
                 logger.info(f"🔊 First 20 bytes: {audio_buffer[:20] if len(audio_buffer) > 20 else audio_buffer}")
                 
-                # Get user ID from session
-                user_id = get_user_id_from_session(session_id)
-                logger.info(f"👤 User ID: {user_id}, Project: {project_name}")
+                # Use userId from request if provided, otherwise fall back to session lookup
+                if not user_id:
+                    user_id = get_user_id_from_session(session_id)
+                    logger.info(f"🔄 Using userId from session lookup: {user_id}")
+                else:
+                    logger.info(f"✅ Using userId from request: {user_id}")
+                
+                # Ensure project_name is set (should already be from request, but double-check)
+                if project_name == 'default' and data.get('projectName'):
+                    project_name = data.get('projectName')
+                
+                logger.info(f"👤 Final User ID: {user_id}, Final Project: {project_name}")
                 
                 # Save user audio input to project-specific directory
                 user_audio_filename = f"user_input_{int(time.time())}.webm"
@@ -416,8 +428,18 @@ def process_speech():
         elif text:
             # Process text input
             logger.info(f"📝 Processing text input: {text[:50]}...")
-            # Get user ID from session for project context
-            user_id = get_user_id_from_session(session_id)
+            # Use userId from request if provided, otherwise fall back to session lookup
+            if not user_id:
+                user_id = get_user_id_from_session(session_id)
+                logger.info(f"🔄 Using userId from session lookup: {user_id}")
+            else:
+                logger.info(f"✅ Using userId from request: {user_id}")
+            
+            # Ensure project_name is set
+            if project_name == 'default' and data.get('projectName'):
+                project_name = data.get('projectName')
+            
+            logger.info(f"👤 Final User ID: {user_id}, Final Project: {project_name}")
             result = voice_system.process_voice_input_sync(
                 text, language, tts_voice, tts_engine, user_id, project_name
             )
@@ -425,9 +447,16 @@ def process_speech():
             logger.error("❌ No text or audio provided")
             return jsonify({"error": "No text or audio provided"}), 400
         
-        # Get user ID from session and project name
-        user_id = get_user_id_from_session(session_id)
-        project_name = data.get('projectName', 'default')
+        # user_id and project_name should already be set correctly from request data above
+        # Only fall back to session lookup if they weren't set (shouldn't happen, but safety check)
+        if not user_id:
+            user_id = get_user_id_from_session(session_id)
+            logger.warn(f"⚠️ [AUDIO SAVE] user_id was not set, using session lookup: {user_id}")
+        
+        if project_name == 'default' and data.get('projectName'):
+            project_name = data.get('projectName')
+        
+        logger.info(f"💾 [AUDIO SAVE] Using user_id: {user_id}, project_name: {project_name}")
         
         # Save AI audio response to project-specific directory (as MP3)
         audio_filename = f"ai_response_{int(time.time())}.mp3"
@@ -512,7 +541,7 @@ def process_speech():
                     else:
                         logger.error(f"❌ [AUDIO SAVE] File does not exist after write attempt!")
                     
-                    audio_filename = f"ai_response_{session_id}_{int(time.time())}.mp3"
+                    # audio_filename is already set correctly above, don't reset it
                 except PermissionError as perm_error:
                     logger.error(f"❌ [AUDIO SAVE] Permission denied writing to {audio_path}")
                     logger.error(f"❌ [AUDIO SAVE] Error: {perm_error}")
@@ -531,7 +560,7 @@ def process_speech():
                     logger.error(f"❌ MP3 conversion failed: {convert_error}")
                     # Fallback: save in original format
                     original_ext = audio_format if audio_format != 'wav' else 'wav'
-                    fallback_filename = f"ai_response_{session_id}_{int(time.time())}.{original_ext}"
+                    fallback_filename = f"ai_response_{int(time.time())}.{original_ext}"
                     fallback_path = os.path.join('data', 'ai', fallback_filename)
                     with open(fallback_path, 'wb') as f:
                         f.write(audio_data)
@@ -981,6 +1010,57 @@ def serve_project_ui(user_id, project_name):
         logger.error(f"Error serving project UI file: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": "Failed to serve UI file"}), 500
+
+@app.route('/api/users/<user_id>/<project_name>/js/<filename>')
+def serve_project_js(user_id, project_name, filename):
+    """
+    Serve project-specific JavaScript module files.
+    This allows projects to have custom animation, voice processing, and other modules.
+    
+    Structure: users/{user_id}/{project_name}/js/{filename}
+    
+    Args:
+        user_id: User identifier
+        project_name: Project name
+        filename: JavaScript filename (e.g., 'animation-module.js')
+    """
+    try:
+        # Security: Validate user_id, project_name, and filename (prevent directory traversal)
+        if '..' in user_id or '/' in user_id or '\\' in user_id:
+            return jsonify({"error": "Invalid user ID"}), 400
+        if '..' in project_name or '/' in project_name or '\\' in project_name:
+            return jsonify({"error": "Invalid project name"}), 400
+        if '..' in filename or '/' in filename or '\\' in filename:
+            return jsonify({"error": "Invalid filename"}), 400
+        
+        # Ensure filename ends with .js
+        if not filename.endswith('.js'):
+            return jsonify({"error": "Invalid file type. Only .js files are allowed"}), 400
+        
+        # Get project base path (users/{user_id}/{project_name})
+        project_base = get_project_base_path(user_id, project_name)
+        js_file_path = os.path.join(project_base, 'js', filename)
+        
+        # Security: Ensure the path is within the user's directory
+        user_base = get_user_base_path(user_id)
+        if not os.path.abspath(js_file_path).startswith(os.path.abspath(user_base)):
+            return jsonify({"error": "Invalid file path"}), 403
+        
+        # Check if JS file exists
+        if not os.path.exists(js_file_path) or not os.path.isfile(js_file_path):
+            logger.warning(f"Project JS file not found: {js_file_path}")
+            return jsonify({"error": "Project JS file not found"}), 404
+        
+        # Read and return the JS file content
+        with open(js_file_path, 'r', encoding='utf-8') as f:
+            js_content = f.read()
+        
+        # Return as JavaScript
+        return js_content, 200, {'Content-Type': 'application/javascript; charset=utf-8'}
+    except Exception as e:
+        logger.error(f"Error serving project JS file: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": "Failed to serve JS file"}), 500
 
 @app.route('/api/users/<user_id>/<project_name>/media/videos/<video_dir>/<filename>')
 def serve_project_video_frame(user_id, project_name, video_dir, filename):
