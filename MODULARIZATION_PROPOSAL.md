@@ -5,7 +5,6 @@
 - **Main Issue**: All JavaScript is in a single file, making it difficult to maintain and debug
 - **Specific Problem**: Video feed logic is buried in the middle of the file, making it hard to isolate issues
 - **Architecture Issue**: Project-specific code (talking-orange animations, voice processing) is mixed with core AR functionality
-- **Architecture Issue**: Project-specific code (talking-orange animations, voice processing) is mixed with core AR functionality
 
 ## Proposed Modularization Strategy
 
