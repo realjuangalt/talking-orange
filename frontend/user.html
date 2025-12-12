@@ -1071,14 +1071,20 @@
                     const result = await response.json();
                     
                     if (response.ok) {
+                        const convertedMsg = result.converted ? ' (converted to optimal format)' : '';
+                        const successMsg = result.message || `✅ Uploaded: ${result.filename || file.name}${convertedMsg}`;
+                        
                         console.log('✅ [USER-ACTION] Media file uploaded successfully:', {
                             filename: result.filename || file.name,
                             originalName: file.name,
-                            duration: `${uploadDuration}ms`
+                            converted: result.converted || false,
+                            duration: `${uploadDuration}ms`,
+                            message: result.message
                         });
+                        
                         uploadedFiles.media.push(result);
                         updateFileList('media-file-list', uploadedFiles.media, 'media');
-                        showStatus(`✅ Uploaded: ${file.name}`, 'success');
+                        showStatus(successMsg, 'success');
                     } else {
                         console.error('❌ [USER-ACTION] Media upload failed:', {
                             filename: file.name,

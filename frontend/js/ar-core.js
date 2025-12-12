@@ -171,111 +171,29 @@ async function loadAvailableTargets() {
     }
 }
 
-// Global state for target detection cycling
-let targetDetectionState = {
-    currentTargetIndex: 0,
-    detectionTimeout: null,
-    targetLocked: false,
-    detectionAttempts: 0,
-    maxAttemptsPerTarget: 120, // Try each target for ~6 seconds (120 * 50ms) - MindAR needs time to load
-    mindarLoading: false // Track if MindAR is still loading a target
-};
+// Target scanning is now handled by target-scanner.js module
+// Keep these for backward compatibility if needed, but prefer window.targetScanner
 
 /**
  * Try next target for detection (Artivive-style auto-detection)
+ * @deprecated Use window.targetScanner.tryNextTarget() instead
  */
 function tryNextTarget() {
-    if (!window.allAvailableTargets || window.allAvailableTargets.length === 0) {
-        console.warn('⚠️ [TARGET] No targets available for detection');
-        return;
+    if (window.targetScanner && typeof window.targetScanner.tryNextTarget === 'function') {
+        return window.targetScanner.tryNextTarget();
     }
-    
-    if (targetDetectionState.targetLocked) {
-        console.log('🔒 [TARGET] Target already locked, not switching');
-        return;
-    }
-    
-    const targets = window.allAvailableTargets;
-    const scene = document.querySelector('#ar-scene');
-    
-    // Move to next target
-    targetDetectionState.currentTargetIndex = (targetDetectionState.currentTargetIndex + 1) % targets.length;
-    const target = targets[targetDetectionState.currentTargetIndex];
-    
-    console.log(`🔄 [TARGET] Trying target ${targetDetectionState.currentTargetIndex + 1}/${targets.length}: ${target.targetId}`);
-    
-    // Update current target
-    currentTarget = target;
-    currentTargetMedia = target.media || [];
-    window.currentTarget = currentTarget;
-    window.currentTargetMedia = currentTargetMedia;
-    
-    // Switch MindAR to this target
-    if (scene) {
-        const targetUrl = target.url;
-        console.log(`🎯 [TARGET] Switching MindAR to: ${targetUrl}`);
-        
-        // Mark that we're loading a new target
-        targetDetectionState.mindarLoading = true;
-        
-        // Add error handler for corrupted .mind files
-        const mindarErrorHandler = (event) => {
-            console.error(`❌ [TARGET] MindAR error loading ${target.targetId}:`, event.detail || event);
-            targetDetectionState.mindarLoading = false;
-            // Skip this target and try next one
-            console.log(`⏭️ [TARGET] Skipping corrupted target, trying next...`);
-            targetDetectionState.detectionAttempts = targetDetectionState.maxAttemptsPerTarget; // Force skip
-        };
-        
-        // Listen for MindAR loaded event
-        const mindarLoadedHandler = () => {
-            console.log(`✅ [TARGET] MindAR finished loading ${target.targetId}`);
-            targetDetectionState.mindarLoading = false;
-        };
-        
-        // Listen for MindAR errors and loaded events
-        scene.addEventListener('mindar-error', mindarErrorHandler, { once: true });
-        scene.addEventListener('mindar-loaded', mindarLoadedHandler, { once: true });
-        
-        // Also check after a timeout (in case events don't fire)
-        setTimeout(() => {
-            if (targetDetectionState.mindarLoading) {
-                console.log(`⏱️ [TARGET] MindAR load timeout for ${target.targetId}, assuming loaded`);
-                targetDetectionState.mindarLoading = false;
-            }
-        }, 2000); // 2 second timeout for loading
-        
-        try {
-            scene.setAttribute('mindar-image', `imageTargetSrc: ${targetUrl}; maxTrack: 1; missTolerance: 80; warmupTolerance: 8; filterMinCF: 0.00001; filterBeta: 10000; uiLoading: yes; uiScanning: no; uiError: yes;`);
-            
-            // Reload media for this target
-            const assets = document.querySelector('#ar-assets');
-            const orangePlane = document.querySelector('#talking-orange-plane');
-            if (assets && orangePlane) {
-                loadTargetMedia(assets, orangePlane);
-            }
-        } catch (error) {
-            console.error(`❌ [TARGET] Error switching to target ${target.targetId}:`, error);
-            targetDetectionState.mindarLoading = false;
-            // Skip this target
-            targetDetectionState.detectionAttempts = targetDetectionState.maxAttemptsPerTarget;
-        }
-    }
-    
-    // Reset detection attempts for this target
-    targetDetectionState.detectionAttempts = 0;
+    console.error('❌ [AR-CORE] target-scanner.js not loaded - tryNextTarget requires scanner module');
 }
 
 /**
  * Lock onto a detected target (stop cycling)
+ * @deprecated Use window.targetScanner.lockTarget() instead
  */
 function lockTarget(target) {
-    targetDetectionState.targetLocked = true;
-    if (targetDetectionState.detectionTimeout) {
-        clearTimeout(targetDetectionState.detectionTimeout);
-        targetDetectionState.detectionTimeout = null;
+    if (window.targetScanner && typeof window.targetScanner.lockTarget === 'function') {
+        return window.targetScanner.lockTarget(target);
     }
-    console.log(`🔒 [TARGET] Locked onto target: ${target.targetId}`);
+    console.warn('⚠️ [AR-CORE] target-scanner.js not loaded, falling back to legacy function');
 }
 
 /**
@@ -318,45 +236,42 @@ function initializeARSystem() {
     ensureScenePlaying(scene);
     scene.addEventListener('loaded', () => ensureScenePlaying(scene), { once: true });
     
+    // Initialize target scanner
+    if (window.targetScanner && typeof window.targetScanner.init === 'function') {
+        window.targetScanner.init();
+    }
+    
     // Start cycling through targets if none detected after a delay
     // This allows time for the first target to be detected before switching
     setTimeout(() => {
-        if (!targetDetectionState.targetLocked) {
-            console.log('🔄 [TARGET] Starting target detection cycle...');
-            startTargetDetectionCycle();
+        if (window.targetScanner && typeof window.targetScanner.startScanning === 'function') {
+            console.log('🔄 [TARGET] Starting target scanner...');
+            // Only start if not already locked (target might have been detected during the delay)
+            if (!window.targetScanner.getState || !window.targetScanner.getState().targetLocked) {
+                window.targetScanner.startScanning();
+            } else {
+                console.log('🔒 [TARGET] Target already locked, skipping scan start');
+            }
+        } else {
+            console.warn('⚠️ [TARGET] target-scanner.js not loaded, using fallback');
+            // Fallback to old method if scanner not available
+            if (window.targetScanner && typeof window.targetScanner.startScanning === 'function') {
+                window.targetScanner.startScanning();
+            } else if (typeof startTargetDetectionCycle === 'function') {
+                startTargetDetectionCycle();
+            }
         }
     }, 2000); // Wait 2 seconds before starting cycle
 
 /**
  * Start cycling through targets for detection
+ * @deprecated Use window.targetScanner.startScanning() instead
  */
 function startTargetDetectionCycle() {
-    if (targetDetectionState.targetLocked) {
-        return;
+    if (window.targetScanner && typeof window.targetScanner.startScanning === 'function') {
+        return window.targetScanner.startScanning();
     }
-    
-    // Don't advance if MindAR is still loading
-    if (targetDetectionState.mindarLoading) {
-        // Check again soon
-        targetDetectionState.detectionTimeout = setTimeout(() => {
-            startTargetDetectionCycle();
-        }, 100); // Check every 100ms while loading
-        return;
-    }
-    
-    targetDetectionState.detectionAttempts++;
-    
-    // If we've tried this target long enough, move to next
-    if (targetDetectionState.detectionAttempts >= targetDetectionState.maxAttemptsPerTarget) {
-        tryNextTarget();
-    }
-    
-    // Continue cycling (only if not locked)
-    if (!targetDetectionState.targetLocked) {
-        targetDetectionState.detectionTimeout = setTimeout(() => {
-            startTargetDetectionCycle();
-        }, 50); // Check every 50ms
-    }
+    console.warn('⚠️ [AR-CORE] target-scanner.js not loaded, startTargetDetectionCycle cannot function without scanner module');
 }
 
 /**
@@ -569,17 +484,69 @@ function loadTargetMedia(assets, orangePlane) {
         return;
     }
     
-    // Find image files for different states
-    const images = targetMedia.filter(m => m.type === 'image');
-    console.log(`🖼️ [MEDIA] Found ${images.length} image(s):`, images.map(img => img.filename));
+    // Filter out target source images (these are for detection, not projection)
+    // Target images are in targets/ folder or have target_source_ prefix
+    const isTargetImage = (filename) => {
+        const lower = filename.toLowerCase();
+        return lower.includes('target_source_') || 
+               lower.includes('/targets/') ||
+               lower.startsWith('target_');
+    };
     
-    // More flexible image selection:
-    // 1. Try to find specific named images (smile, wink, etc.)
-    // 2. Fall back to any image/GIF as the default display
-    const smileImg = images.find(m => m.filename.toLowerCase().includes('smile')) 
-        || images.find(m => m.filename.toLowerCase().includes('default'))
-        || images.find(m => !m.filename.toLowerCase().includes('wink') && !m.filename.toLowerCase().includes('thinking') && !m.filename.toLowerCase().includes('talking'))
-        || images[0]; // Use first image as fallback
+    // Separate media into categories
+    const allImages = targetMedia.filter(m => m.type === 'image');
+    const images = allImages.filter(m => !isTargetImage(m.filename)); // Exclude target images
+    const targetImages = allImages.filter(m => isTargetImage(m.filename)); // Target images (for reference only)
+    
+    console.log(`🖼️ [MEDIA] Found ${images.length} AR content image(s):`, images.map(img => img.filename));
+    if (targetImages.length > 0) {
+        console.log(`🎯 [MEDIA] Found ${targetImages.length} target image(s) (excluded from projection):`, targetImages.map(img => img.filename));
+    }
+    
+    // Find animated content (GIFs, videos) - these should be prioritized for AR projection
+    const gifs = images.filter(m => m.filename.toLowerCase().endsWith('.gif'));
+    const videos = targetMedia.filter(m => m.type === 'video' || m.type === 'video_animation');
+    
+    console.log(`🎬 [MEDIA] Found ${gifs.length} GIF(s) and ${videos.length} video(s) for AR projection`);
+    
+    // For most projects: prioritize animated content (GIF/video) over static images
+    // For talking-orange project: use special image selection logic
+    const isTalkingOrangeProject = target?.projectName?.toLowerCase() === 'talking-orange';
+    
+    let defaultContent = null;
+    let defaultContentType = null;
+    
+    if (isTalkingOrangeProject) {
+        // Special handling for talking-orange project (multiple state images)
+        const smileImg = images.find(m => m.filename.toLowerCase().includes('smile')) 
+            || images.find(m => m.filename.toLowerCase().includes('default'))
+            || images.find(m => !m.filename.toLowerCase().includes('wink') && !m.filename.toLowerCase().includes('thinking') && !m.filename.toLowerCase().includes('talking'))
+            || images[0];
+        defaultContent = smileImg;
+        defaultContentType = 'image';
+    } else {
+        // For other projects: prioritize animated content
+        // 1. GIFs (most common AR content)
+        // 2. Videos
+        // 3. Static images (only if no animated content)
+        if (gifs.length > 0) {
+            defaultContent = gifs[0]; // Use first GIF
+            defaultContentType = 'gif';
+            console.log(`🎬 [MEDIA] Using GIF for AR projection: ${defaultContent.filename}`);
+        } else if (videos.length > 0) {
+            defaultContent = videos[0]; // Use first video
+            defaultContentType = 'video';
+            console.log(`🎬 [MEDIA] Using video for AR projection: ${defaultContent.filename}`);
+        } else if (images.length > 0) {
+            // Fallback to static image only if no animated content
+            defaultContent = images[0];
+            defaultContentType = 'image';
+            console.log(`🖼️ [MEDIA] Using static image for AR projection (no animated content): ${defaultContent.filename}`);
+        }
+    }
+    
+    // Legacy support for talking-orange project image states
+    const smileImg = isTalkingOrangeProject ? defaultContent : null;
     const winkImg = images.find(m => m.filename.toLowerCase().includes('wink'));
     const thinkingImgs = images.filter(m => m.filename.toLowerCase().includes('thinking')).sort();
     const talkingImgs = images.filter(m => m.filename.toLowerCase().includes('talking')).sort();
@@ -632,12 +599,74 @@ function loadTargetMedia(assets, orangePlane) {
         console.log(`📹 Found ${videoAnimations.length} video animation(s)`);
     }
     
-    // Set initial orange plane image
-    if (smileImg && orangePlane) {
-        orangePlane.setAttribute('src', '#talking-orange');
-        console.log(`🎨 [MEDIA] Set orange plane source to: #talking-orange (${smileImg.filename})`);
+    // Create asset elements for all content types
+    // For GIFs (non-talking-orange projects)
+    if (defaultContentType === 'gif' && defaultContent) {
+        const gifImg = document.createElement('img');
+        gifImg.id = 'ar-content-gif';
+        gifImg.src = defaultContent.url;
+        gifImg.onload = () => console.log(`✅ [MEDIA] Loaded GIF for AR projection: ${defaultContent.filename}`);
+        gifImg.onerror = () => console.error(`❌ [MEDIA] Failed to load GIF: ${defaultContent.filename}`);
+        // Remove existing GIF if any
+        const existingGif = assets.querySelector('#ar-content-gif');
+        if (existingGif) {
+            assets.removeChild(existingGif);
+        }
+        assets.appendChild(gifImg);
+    }
+    
+    // For talking-orange project, create image assets as before
+    if (smileImg) {
+        // Remove existing if any
+        const existing = assets.querySelector('#talking-orange');
+        if (existing) {
+            assets.removeChild(existing);
+        }
+        const img = document.createElement('img');
+        img.id = 'talking-orange';
+        img.src = smileImg.url;
+        img.onload = () => console.log(`✅ [MEDIA] Loaded default image: ${smileImg.filename} (${smileImg.url})`);
+        img.onerror = () => console.error(`❌ [MEDIA] Failed to load image: ${smileImg.filename} (${smileImg.url})`);
+        assets.appendChild(img);
+        console.log(`🖼️ [MEDIA] Added default image asset: ${smileImg.filename} -> #talking-orange`);
+    }
+    
+    // Set initial AR content to display on the plane
+    if (defaultContent && orangePlane) {
+        if (defaultContentType === 'gif') {
+            // For GIFs, use the GIF asset we just created
+            orangePlane.setAttribute('src', '#ar-content-gif');
+            console.log(`🎨 [MEDIA] Set AR plane source to GIF: ${defaultContent.filename}`);
+        } else if (defaultContentType === 'video') {
+            // For videos, we'd need to handle video elements differently
+            // For now, log a warning - video projection might need special handling
+            console.warn('⚠️ [MEDIA] Video AR content detected - may need special handling');
+            // Fallback to first image if available
+            if (images.length > 0) {
+                const img = document.createElement('img');
+                img.id = 'ar-content-fallback';
+                img.src = images[0].url;
+                assets.appendChild(img);
+                orangePlane.setAttribute('src', '#ar-content-fallback');
+                console.log(`🎨 [MEDIA] Using fallback image for video content: ${images[0].filename}`);
+            }
+        } else if (smileImg) {
+            // For talking-orange project or static images
+            orangePlane.setAttribute('src', '#talking-orange');
+            console.log(`🎨 [MEDIA] Set AR plane source to: #talking-orange (${smileImg.filename})`);
+        } else if (images.length > 0) {
+            // Fallback: use first available image (non-target image)
+            const img = document.createElement('img');
+            img.id = 'ar-content-image';
+            img.src = images[0].url;
+            assets.appendChild(img);
+            orangePlane.setAttribute('src', '#ar-content-image');
+            console.log(`🎨 [MEDIA] Set AR plane source to image: ${images[0].filename}`);
+        } else {
+            console.warn('⚠️ [MEDIA] No AR content available for projection');
+        }
     } else if (orangePlane) {
-        console.warn('⚠️ [MEDIA] No default image available for orange plane');
+        console.warn('⚠️ [MEDIA] No default content available for AR plane');
     }
     
     // Store current target globally for other modules (already have target from above)
@@ -777,10 +806,13 @@ if (typeof window !== 'undefined') {
     window.loadTargetMedia = loadTargetMedia;
     window.loadDefaultMedia = loadDefaultMedia;
     window.getAudioUrl = getAudioUrl;
-    // Artivive-style target detection functions
+    // Artivive-style target detection functions (deprecated - use window.targetScanner instead)
     window.lockTarget = lockTarget;
     window.tryNextTarget = tryNextTarget;
-    window.startTargetDetectionCycle = startTargetDetectionCycle;
+    // Only export startTargetDetectionCycle if it's defined (it's a wrapper that uses scanner)
+    if (typeof startTargetDetectionCycle === 'function') {
+        window.startTargetDetectionCycle = startTargetDetectionCycle;
+    }
     window.ensureScenePlaying = ensureScenePlaying;
     // Export global variables
     window.availableTargets = availableTargets;

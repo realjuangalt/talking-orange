@@ -97,9 +97,12 @@ function setupTrackingSystem(marker, orangePlane) {
         // Get current target from global (prefer window.currentTarget from ar-core.js)
         const currentTarget = window.currentTarget;
         console.log('🔍 [TRACKING] currentTarget in targetFound:', currentTarget);
-        
+
         // Lock onto this target (Artivive-style: stop cycling, we found a match)
-        if (typeof window.lockTarget === 'function') {
+        if (window.targetScanner && typeof window.targetScanner.lockTarget === 'function') {
+            window.targetScanner.lockTarget(currentTarget);
+        } else if (typeof window.lockTarget === 'function') {
+            // Fallback to old method
             window.lockTarget(currentTarget);
         }
         
@@ -233,6 +236,11 @@ function setupTrackingSystem(marker, orangePlane) {
     
     marker.addEventListener('targetLost', function() {
         console.log('❌ [TRACKING] Target LOST - Marker no longer detected!');
+        
+        // Unlock target and resume scanning (Artivive-style: resume when target removed)
+        if (window.targetScanner && typeof window.targetScanner.unlockTarget === 'function') {
+            window.targetScanner.unlockTarget();
+        }
         
         // Hide project UI when target is lost (but don't remove it, just hide)
         const projectUIContainer = document.getElementById('project-ui-container');

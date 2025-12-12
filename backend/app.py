@@ -1450,22 +1450,103 @@ def upload_user_file():
                     "hint": "Install Node.js: https://nodejs.org/ then run: npm install -g mind-ar-compiler"
                 }), 500
         else:
-            # Regular media files
-            filename = original_filename
-            file_path = os.path.join(save_dir, filename)
+            # Regular media files (AR content)
+            # Process and convert to optimal format for AR projection
+            logger.info(f"📦 Processing AR content upload: {original_filename}")
             
-            # Save file
-            file.save(file_path)
-            file_size = os.path.getsize(file_path)
+            # Determine file type and extension
+            file_ext = os.path.splitext(original_filename)[1].lower()
+            file_type_detected = _get_file_type(original_filename)
             
-            logger.info(f"✅ File uploaded: {file_path} ({file_size} bytes)")
+            # Save original file first
+            temp_path = os.path.join(save_dir, f"temp_{int(time.time())}_{original_filename}")
+            file.save(temp_path)
+            logger.info(f"💾 Saved temporary file: {temp_path}")
+            
+            # Process based on file type
+            final_filename = original_filename
+            final_path = os.path.join(save_dir, final_filename)
+            conversion_applied = False
+            
+            try:
+                if file_type_detected == 'video':
+                    # For videos: convert to web-compatible format (MP4/WebM)
+                    # Check if already in good format
+                    if file_ext in ['.mp4', '.webm']:
+                        # Already in good format, just move to final location
+                        os.rename(temp_path, final_path)
+                        logger.info(f"✅ Video already in web format, saved as: {final_filename}")
+                    else:
+                        # Convert to MP4 using ffmpeg
+                        logger.info(f"🔄 Converting video to MP4 format...")
+                        mp4_filename = os.path.splitext(original_filename)[0] + '.mp4'
+                        final_path = os.path.join(save_dir, mp4_filename)
+                        
+                        try:
+                            import subprocess
+                            # Convert using ffmpeg
+                            result = subprocess.run([
+                                'ffmpeg', '-i', temp_path,
+                                '-c:v', 'libx264', '-preset', 'medium', '-crf', '23',
+                                '-c:a', 'aac', '-b:a', '128k',
+                                '-movflags', '+faststart',  # Web optimization
+                                '-y',  # Overwrite output
+                                final_path
+                            ], capture_output=True, text=True, timeout=300)
+                            
+                            if result.returncode == 0 and os.path.exists(final_path):
+                                os.remove(temp_path)  # Remove temp file
+                                final_filename = mp4_filename
+                                conversion_applied = True
+                                logger.info(f"✅ Video converted to MP4: {final_filename}")
+                            else:
+                                logger.warning(f"⚠️ Video conversion failed, using original: {result.stderr}")
+                                os.rename(temp_path, final_path)
+                        except FileNotFoundError:
+                            logger.warning("⚠️ ffmpeg not found, saving video in original format")
+                            os.rename(temp_path, final_path)
+                        except subprocess.TimeoutExpired:
+                            logger.error("❌ Video conversion timed out, using original")
+                            os.rename(temp_path, final_path)
+                        except Exception as conv_error:
+                            logger.error(f"❌ Video conversion error: {conv_error}, using original")
+                            os.rename(temp_path, final_path)
+                
+                elif file_type_detected == 'image':
+                    # For images: optimize if needed, but keep format
+                    # GIFs should be kept as-is (they're perfect for AR)
+                    if file_ext == '.gif':
+                        # GIFs are ideal for AR, keep as-is
+                        os.rename(temp_path, final_path)
+                        logger.info(f"✅ GIF saved as-is (ideal for AR): {final_filename}")
+                    else:
+                        # For other images, we could optimize, but for now just save
+                        # In the future, we could use PIL to optimize/compress
+                        os.rename(temp_path, final_path)
+                        logger.info(f"✅ Image saved: {final_filename}")
+                
+                else:
+                    # Other file types: save as-is
+                    os.rename(temp_path, final_path)
+                    logger.info(f"✅ File saved: {final_filename}")
+            
+            except Exception as process_error:
+                logger.error(f"❌ Error processing file: {process_error}")
+                # Fallback: just save the original
+                if os.path.exists(temp_path):
+                    os.rename(temp_path, final_path)
+            
+            file_size = os.path.getsize(final_path)
+            logger.info(f"✅ AR content uploaded: {final_path} ({file_size} bytes, conversion: {conversion_applied})")
             
             return jsonify({
                 "success": True,
-                "filename": filename,
+                "filename": final_filename,
                 "size": file_size,
                 "fileType": file_type,
-                "url": get_user_media_url(user_id, filename, project_name)
+                "converted": conversion_applied,
+                "url": get_user_media_url(user_id, final_filename, project_name),
+                "message": f"AR content uploaded successfully!" + (" (converted to optimal format)" if conversion_applied else "")
             }), 200
         
     except Exception as e:
