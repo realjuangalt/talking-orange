@@ -4,6 +4,7 @@
 - **File Size**: 3,531 lines
 - **Main Issue**: All JavaScript is in a single file, making it difficult to maintain and debug
 - **Specific Problem**: Video feed logic is buried in the middle of the file, making it hard to isolate issues
+- **Architecture Issue**: Project-specific code (talking-orange animations, voice processing) is mixed with core AR functionality
 
 ## Proposed Modularization Strategy
 
@@ -139,11 +140,12 @@ backend/users/{user_id}/{project_name}/
 1. **HTML structure** (lines 1-145)
 2. **CSS styles** (keep inline for now, or move to separate CSS file)
 3. **Global variables** (availableTargets, currentTarget, currentLanguage, etc.)
-4. **DOMContentLoaded initialization** - Orchestrates module loading
-5. **Module orchestration** - Calls setup functions from modules
-6. **Global window assignments** - Exposes functions for external access
+4. **DOMContentLoaded initialization** - Orchestrates core module loading
+5. **Core module orchestration** - Calls setup functions from core modules
+6. **Project module loader** - Dynamically loads project-specific modules after target detection
+7. **Global window assignments** - Exposes functions for external access
 
-**Estimated remaining size**: ~800-1000 lines
+**Estimated remaining size**: ~800-1000 lines (reduced from 3,531 lines)
 
 ---
 
@@ -226,9 +228,12 @@ Project Folder (backend/users/{user_id}/{project_name}/js/)
 ## Risks & Mitigation
 
 1. **Global variable pollution** - Use namespacing or explicit window assignments
-2. **Load order issues** - Use script tags in correct order
+2. **Load order issues** - Use script tags in correct order for core modules; load project modules sequentially after target detection
 3. **Breaking changes** - Extract one module at a time, test after each
 4. **Context loss** - Keep related functions together, document dependencies
+5. **Project module loading failures** - Gracefully handle missing project modules (they're optional)
+6. **Dependency timing** - Ensure project modules load in correct order (animation-module → animation-controllers → voice-processing)
+7. **Backend endpoint security** - Validate user_id and project_name to prevent directory traversal attacks
 
 ---
 
